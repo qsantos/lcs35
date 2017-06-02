@@ -8,6 +8,8 @@ import shutil
 import tempfile
 import datetime
 
+import arithmetic
+
 progress_file = 'capsule_progress'
 
 
@@ -65,13 +67,31 @@ signal.signal(signal.SIGQUIT, exit_handler)
 
 nc = n * c
 
+# stuff for Montgomery modular reduction
+N = nc
+log_R = 2080
+R = 2**log_R
+mask = R - 1
+minus_inv_N = arithmetic.invert(-N, R)
+inv_R = arithmetic.invert(R, N)
+W = (R*w) % N  # convert w to Montgomery representation
+assert N * minus_inv_N % R == R-1
+
 prev_i, prev_time = i, time.clock()
 max_stepsize = 2**20
 while i < t:
     stepsize = min(t - i, max_stepsize)
+    # Montgomery modular reduction
+    # W * W mod N
+    # (Rw) * (Rw) * R^-1 mod N
     for _ in range(stepsize):
-        w = (w*w) % nc
+        T = W*W
+        Q = (minus_inv_N * (T & mask)) & mask
+        W = (T + Q*N) >> log_R
     i += stepsize
+
+    # convert w back from Montgomery representation
+    w = (W * inv_R) % N
 
     # check progress
     assert pow(2, pow(2, i, c-1), c) == w % c
