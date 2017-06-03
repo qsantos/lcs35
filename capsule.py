@@ -95,8 +95,8 @@ while i < t:
     seconds_left = (t - i) / units_per_second
     prev_i, prev_time = i, now
     sys.stderr.write(
-        '\r%012.9f%% (%#.12x / %#.12x) ETA: %s' %
-        (float(i)/t, i, t, eta(seconds_left))
+        '\r%09.6f%% (%#.12x / %#.12x) ETA: %s' %
+        (i*100./t, i, t, eta(seconds_left))
     )
 
 print('\nw = %i' % (w % n))
