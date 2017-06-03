@@ -7,13 +7,12 @@ import pickle
 import shutil
 import tempfile
 import datetime
+import argparse
 
 try:  # Python 3
     import square_py2 as square
 except ImportError:  # Python 2
     import square_py3 as square
-
-progress_file = 'capsule_progress'
 
 
 def exit_handler(signum, frame):
@@ -31,9 +30,19 @@ def eta(seconds):
         return '%.1f years' % (td.days / 365.25)
 
 
+parser = argparse.ArgumentParser()
+parser.description = "Solve Rivest's Time lock"
+parser.add_argument('savefile', help='Name of the persistence file')
+parser.epilog = (
+    'The persistence file will be used to regularly save checkpoints in the '
+    'computations. This allows to pause and resume the calculation, and '
+    'prevents an unexpected interruption from ruining previous work.'
+)
+args = parser.parse_args()
+
 # restore progress
 try:
-    f = open(progress_file, 'rb')
+    f = open(args.savefile, 'rb')
 except:
     n = int(
         '631446608307288889379935712613129233236329881833084137558899'
@@ -87,7 +96,7 @@ while i < t:
         data = {'n': n, 'c': c, 't': t, 'i': i, 'w': w,
                 'checkpoints': checkpoints}
         pickle.dump(data, f)
-    shutil.move(f.name, progress_file)
+    shutil.move(f.name, args.savefile)
 
     # show progress
     now = time.clock()
