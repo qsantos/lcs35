@@ -1,10 +1,12 @@
 #include <gmp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+#include <inttypes.h>
 #include <sys/time.h>
 
-unsigned long long min(unsigned long long a, unsigned long long b) {
+uint64_t min(uint64_t a, uint64_t b) {
     if (a < b) {
         return a;
     } else {
@@ -12,9 +14,9 @@ unsigned long long min(unsigned long long a, unsigned long long b) {
     }
 }
 
-unsigned long long powm(unsigned long long b, unsigned long long e, unsigned long long m) {
+uint64_t powm(uint64_t b, uint64_t e, uint64_t m) {
     /* Compute b^e mod m */
-    unsigned long long r = 1;
+    uint64_t r = 1;
     while (e) {
         if (e & 1) {
             r = (r*b) % m;
@@ -52,38 +54,38 @@ size_t getnline(char* s, size_t n, FILE* f) {
 
 size_t eta(char* s, size_t n, double secs) {
     /* Format remaining time in a human friendly way */
-    unsigned long long seconds = secs;
+    uint64_t seconds = secs;
     if (seconds < 2) {
         return snprintf(s, n, "%.1f second", secs);
     }
 
-    unsigned long long minutes = seconds / 60.;
+    uint64_t minutes = seconds / 60.;
     seconds %= 60;
     if (minutes < 1) {
-        return snprintf(s, n, "%llu seconds", seconds);
+        return snprintf(s, n, "%"PRIu64" seconds", seconds);
     }
 
-    unsigned long long hours = minutes / 60;
+    uint64_t hours = minutes / 60;
     minutes %= 60;
-    unsigned long long days = hours / 24;
+    uint64_t days = hours / 24;
     hours %= 24;
     if (days < 1) {
-        return snprintf(s, n, "%02llu:%02llu:%02llu", hours, minutes, seconds);
+        return snprintf(s, n, "%02"PRIu64":%02"PRIu64":%02"PRIu64"", hours, minutes, seconds);
     }
     if (days < 1) {
-        return snprintf(s, n, "1 day %02llu:%02llu:%02llu", hours, minutes, seconds);
+        return snprintf(s, n, "1 day %02"PRIu64":%02"PRIu64":%02"PRIu64"", hours, minutes, seconds);
     }
 
-    unsigned long long years = days / 365;
+    uint64_t years = days / 365;
     days %= 365;
     if (years < 1) {
-        return snprintf(s, n, "%llu days %02llu:%02llu:%02llu", days, hours, minutes, seconds);
+        return snprintf(s, n, "%"PRIu64" days %02"PRIu64":%02"PRIu64":%02"PRIu64"", days, hours, minutes, seconds);
     }
     if (years < 2) {
-        return snprintf(s, n, "1 year %llu days", days);
+        return snprintf(s, n, "1 year %"PRIu64" days", days);
     }
 
-    return snprintf(s, n, "%llu years %llu days", years, days);
+    return snprintf(s, n, "%"PRIu64" years %"PRIu64" days", years, days);
 
 }
 
@@ -100,9 +102,9 @@ int main(int argc, char** argv) {
     const char* savefile = argv[1];
 
     // initialize to default values
-    unsigned long long c = 2446683847;  // 32 bit prime
-    unsigned long long t = 79685186856218;  // target exponent
-    unsigned long long i = 0;  // current exponent
+    uint64_t c = 2446683847;  // 32 bit prime
+    uint64_t t = 79685186856218;  // target exponent
+    uint64_t i = 0;  // current exponent
     // 2046-bit RSA modulus
     mpz_t n;
     mpz_init_set_str(n, 
@@ -127,9 +129,9 @@ int main(int argc, char** argv) {
     if (f != NULL) {
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
-        fscanf(f, "%llu\n", &t);  // t
-        fscanf(f, "%llu\n", &i);  // i
-        fscanf(f, "%llu\n", &c);  // i
+        fscanf(f, "%"PRIu64"\n", &t);  // t
+        fscanf(f, "%"PRIu64"\n", &i);  // i
+        fscanf(f, "%"PRIu64"\n", &c);  // i
         // n
         char line[1024];
         getnline(line, sizeof(line), f);
@@ -142,12 +144,12 @@ int main(int argc, char** argv) {
         // consistency check
         // because c is prime:
         // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-        unsigned long long reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
-        unsigned long long check = powm(2, reduced_e, c);  // 2^(2^i) mod c
-        unsigned long long w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
+        uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
+        uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
+        uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
         if (w_mod_c != check) {
             fprintf(stderr, "Inconsistency detected in savefile\n");
-            fprintf(stderr, "%llu != %llu\n", check, w_mod_c);
+            fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
             exit(1);
         }
     }
@@ -163,11 +165,11 @@ int main(int argc, char** argv) {
     mpz_mul_ui(n_times_c, n, c);
 
     // initialize timer
-    unsigned long long prev_i = i;
+    uint64_t prev_i = i;
     double prev_time = real_clock();
 
     while (i < t) {
-        unsigned long long stepsize = min(t -i, 1ULL<<20);
+        uint64_t stepsize = min(t -i, 1ULL<<20);
 
         // w = w^(2^stepsize) mod (n*c);
         mpz_t tmp;
@@ -181,12 +183,12 @@ int main(int argc, char** argv) {
         // consistency check
         // because c is prime:
         // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-        unsigned long long reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
-        unsigned long long check = powm(2, reduced_e, c);  // 2^(2^i) mod c
-        unsigned long long w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
+        uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
+        uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
+        uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
         if (w_mod_c != check) {
             fprintf(stderr, "Inconsistency detected\n");
-            fprintf(stderr, "%llu != %llu\n", check, w_mod_c);
+            fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
             exit(1);
         }
 
@@ -198,9 +200,9 @@ int main(int argc, char** argv) {
         FILE* f = fopen(newsavefile, "wb");
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
-        fprintf(f, "%llu\n", t);  // t
-        fprintf(f, "%llu\n", i);  // i
-        fprintf(f, "%llu\n", c);  // c
+        fprintf(f, "%"PRIu64"\n", t);  // t
+        fprintf(f, "%"PRIu64"\n", i);  // i
+        fprintf(f, "%"PRIu64"\n", c);  // c
         // n
         char* str_n = mpz_get_str(NULL, 10, n);
         fprintf(f, "%s\n", str_n);
@@ -219,7 +221,7 @@ int main(int argc, char** argv) {
         double seconds_left = (t - i) / units_per_second;
         char eta_buffer[1024];
         eta(eta_buffer, sizeof(eta_buffer), seconds_left);
-        fprintf(stderr, "\r%9.6f%% (%#.12llx / %#.12llx) ETA: %s",
+        fprintf(stderr, "\r%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s",
                 i*100./t, i, t, eta_buffer);
 
         // update timer
