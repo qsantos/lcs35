@@ -6,7 +6,6 @@ import signal
 import pickle
 import shutil
 import tempfile
-import datetime
 import argparse
 
 try:  # Python 3
@@ -21,13 +20,28 @@ def exit_handler(signum, frame):
 
 
 def eta(seconds):
-    td = datetime.timedelta(seconds=seconds)
-    if td < datetime.timedelta(days=30):
-        return str(td)
-    elif td < datetime.timedelta(days=365.25*2):
-        return '%i days' % td.days
-    else:
-        return '%.1f years' % (td.days / 365.25)
+    if seconds < 2:
+        return '%i second' % seconds
+
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 1:
+        return '%i seconds' % seconds
+
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    time = '%02i:%02i:%02i' % (hours, minutes, seconds)
+    if days < 1:
+        return time
+    if days < 2:
+        return '1 day %s' % time
+
+    years, days = divmod(days, 365.25)
+    if years < 1:
+        return '%i days %s' % (days, time)
+    if years < 2:
+        return '1 year %i days' % days
+
+    return '%i years %i days' % (years, days)
 
 
 parser = argparse.ArgumentParser()
@@ -104,7 +118,7 @@ while i < t:
     seconds_left = (t - i) / units_per_second
     prev_i, prev_time = i, now
     sys.stderr.write(
-        '\r%09.6f%% (%#.12x / %#.12x) ETA: %s' %
+        '\r%9.6f%% (%#.12x / %#.12x) ETA: %s' %
         (i*100./t, i, t, eta(seconds_left))
     )
 
