@@ -1,18 +1,14 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -O3
-LDFLAGS = -shared -fPIC -lgmp
-TARGETS = square.so square_py2.so square_py3.so
+# __USE_MINGW_ANSI_STDIO lets MinGW use the %llu format specifier
+CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -O3 -D__USE_MINGW_ANSI_STDIO=1 -g
+LDFLAGS = -lgmp
+TARGETS = lcs35
 
 all: $(TARGETS)
 
-%.so: %.c
-	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@
-
-%_py2.so: %_ext.c %.c
-	$(CC) $(CFLAGS) $$(pkg-config --cflags python2) $(LDFLAGS) $< -o $@
-
-%_py3.so: %_ext.c %.c
-	$(CC) $(CFLAGS) $$(pkg-config --cflags python3) $(LDFLAGS) $< -o $@
+lcs35: lcs35.c
+	@# MinGW wants source files before linker flags
+	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
 
 clean:
 
