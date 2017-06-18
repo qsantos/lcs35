@@ -1,10 +1,40 @@
 #include <gmp.h>
+#include <cpuid.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <inttypes.h>
 #include <sys/time.h>
+
+size_t get_brand_string(char output[49]) {
+    /* Extract CPU brand string from CPUID instruction */
+
+    // check existence of feature
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    eax = __get_cpuid_max(0x80000000, NULL);
+    if (eax < 0x80000004) {
+        output[0] = '\0';
+        return 0;
+    }
+
+    // obtain brand string by multiple calls to CPUID
+    char buffer[48];
+    for (size_t i = 0; i < 3; i += 1) {
+        __get_cpuid(0x80000002 + i, &eax, &ebx, &ecx, &edx);
+        ((unsigned int*)buffer)[4*i+0] = eax;
+        ((unsigned int*)buffer)[4*i+1] = ebx;
+        ((unsigned int*)buffer)[4*i+2] = ecx;
+        ((unsigned int*)buffer)[4*i+3] = edx;
+    }
+
+    // remove occasional leading spaces
+    size_t n_leading_spaces = strspn(buffer, " ");
+    size_t n_characters = strlen(buffer + n_leading_spaces);
+    memcpy(output, buffer + n_leading_spaces, n_characters);
+    output[n_characters] = '\0';
+    return n_characters;
+}
 
 uint64_t min(uint64_t a, uint64_t b) {
     if (a < b) {
@@ -100,6 +130,11 @@ int main(int argc, char** argv) {
     if (argc == 2) {
         savefile = argv[1];
     }
+
+    // display brand string
+    char brand_string[49];
+    get_brand_string(brand_string);
+    printf("%s\n", brand_string);
 
     // initialize to default values
     uint64_t c = 2446683847;  // 32 bit prime
