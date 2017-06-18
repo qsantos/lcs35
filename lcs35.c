@@ -96,10 +96,10 @@ void usage(const char* name) {
 
 int main(int argc, char** argv) {
     // parse arguments
-    if (argc != 2) {
-        usage(argv[0]);
+    const char* savefile = "savefile";
+    if (argc == 2) {
+        savefile = argv[1];
     }
-    const char* savefile = argv[1];
 
     // initialize to default values
     uint64_t c = 2446683847;  // 32 bit prime
