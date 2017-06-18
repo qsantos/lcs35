@@ -1,6 +1,6 @@
 CC = gcc
 # __USE_MINGW_ANSI_STDIO lets MinGW use the %llu format specifier
-CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -O3 -D__USE_MINGW_ANSI_STDIO=1 -g
+CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -O3 -D__USE_MINGW_ANSI_STDIO=1
 LDFLAGS = -lgmp
 TARGETS = lcs35
 
