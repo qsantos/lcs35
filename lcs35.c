@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 
 size_t get_brand_string(char output[49]) {
     /* Extract CPU brand string from CPUID instruction */
@@ -162,6 +163,15 @@ int main(int argc, char** argv) {
     // try to resume
     FILE* f = fopen(savefile, "r");
     if (f != NULL) {
+        // check that savefile is a regular file
+        // this is required so that rename() can work properly
+        struct stat fileinfo;
+        stat(savefile, &fileinfo);
+        if (!S_ISREG(fileinfo.st_mode)) {
+            fprintf(stderr, "'%s' is not a regular file\n", savefile);
+            usage(argv[0]);
+        }
+
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
         fscanf(f, "%"PRIu64"\n", &t);  // t
