@@ -279,8 +279,10 @@ int main(int argc, char** argv) {
         } else {
             strftime(end_date, sizeof(end_date), "%Y-%m-%d", tm);
         }
+        // clear line
+        fprintf(stderr, "\r\33[K");
         // show information
-        fprintf(stderr, "\r%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s (%s)",
+        fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s (%s)",
                 i*100./t, i, t, eta_buffer, end_date);
 
         // update timer
