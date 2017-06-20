@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     double prev_time = real_clock();
 
     while (i < t) {
-        uint64_t stepsize = min(t -i, 1ULL<<20);
+        uint64_t stepsize = min(t - i, 1ULL<<20);
 
         // w = w^(2^stepsize) mod (n*c);
         mpz_t tmp;
