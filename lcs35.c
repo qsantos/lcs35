@@ -1,4 +1,5 @@
 #include <gmp.h>
+#include <time.h>
 #include <cpuid.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -260,14 +261,27 @@ int main(int argc, char** argv) {
         fclose(f);
         rename(newsavefile, savefile);
 
-        // display progress
+        /* display progress */
+        // compute remaining time in seconds
         double now = real_clock();
         double units_per_second = (i - prev_i) / (now - prev_time);
         double seconds_left = (t - i) / units_per_second;
+        // format human readable estimated remaining time
         char eta_buffer[1024];
         eta(eta_buffer, sizeof(eta_buffer), seconds_left);
-        fprintf(stderr, "\r%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s",
-                i*100./t, i, t, eta_buffer);
+        // format estimated completion date/time
+        time_t timestamp = time(NULL);
+        timestamp += seconds_left;
+        struct tm* tm = localtime(&timestamp);
+        char end_date[1024];
+        if (seconds_left < 86400.) {
+            strftime(end_date, sizeof(end_date), "%Y-%m-%d %H:%M:%S", tm);
+        } else {
+            strftime(end_date, sizeof(end_date), "%Y-%m-%d", tm);
+        }
+        // show information
+        fprintf(stderr, "\r%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s (%s)",
+                i*100./t, i, t, eta_buffer, end_date);
 
         // update timer
         prev_i = i;
