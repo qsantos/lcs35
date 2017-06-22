@@ -22,7 +22,7 @@ size_t get_brand_string(char output[49]) {
 
     // obtain brand string by multiple calls to CPUID
     char buffer[48];
-    for (size_t i = 0; i < 3; i += 1) {
+    for (unsigned int i = 0; i < 3; i += 1) {
         __get_cpuid(0x80000002 + i, &eax, &ebx, &ecx, &edx);
         ((unsigned int*)buffer)[4*i+0] = eax;
         ((unsigned int*)buffer)[4*i+1] = ebx;
@@ -70,11 +70,11 @@ size_t getnline(char* s, size_t n, FILE* f) {
     /* Read until end of line or n-1 next characters */
     size_t r = 0;
     while (r < n-1) {
-        char c = fgetc(f);
+        int c = fgetc(f);
         if (c < 0) {
             break;
         }
-        s[r] = c;
+        s[r] = (char) c;
         r += 1;
         if (c == '\n') {
             break;
@@ -84,14 +84,14 @@ size_t getnline(char* s, size_t n, FILE* f) {
     return r;
 }
 
-size_t eta(char* s, size_t n, double secs) {
+int eta(char* s, size_t n, double secs) {
     /* Format remaining time in a human friendly way */
-    int seconds = secs;
+    int seconds = (int) secs;
     if (seconds < 2) {
         return snprintf(s, n, "%.1f second", secs);
     }
 
-    int minutes = seconds / 60.;
+    int minutes = seconds / 60;
     seconds %= 60;
     if (minutes < 1) {
         return snprintf(s, n, "%i seconds", seconds);
@@ -263,14 +263,14 @@ int main(int argc, char** argv) {
         /* display progress */
         // compute remaining time in seconds
         double now = real_clock();
-        double units_per_second = (i - prev_i) / (now - prev_time);
-        double seconds_left = (t - i) / units_per_second;
+        double units_per_second = (double) (i - prev_i) / (now - prev_time);
+        double seconds_left = (double) (t - i) / units_per_second;
         // format human readable estimated remaining time
         char eta_buffer[1024];
         eta(eta_buffer, sizeof(eta_buffer), seconds_left);
         // format estimated completion date/time
         time_t timestamp = time(NULL);
-        timestamp += seconds_left;
+        timestamp += (time_t) seconds_left;
         struct tm* tm = localtime(&timestamp);
         char end_date[1024];
         if (seconds_left < 86400.) {
@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "\r\33[K");
         // show information
         fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s (%s)",
-                i*100./t, i, t, eta_buffer, end_date);
+                (double)i * 100. / (double) t, i, t, eta_buffer, end_date);
 
         // update timer
         prev_i = i;
