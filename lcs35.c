@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
         // this require both files to be on the same filesystem
         char newsavefile[strlen(savefile) + 5];
         snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
-        FILE* f = fopen(newsavefile, "wb");
+        f = fopen(newsavefile, "wb");
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
         fprintf(f, "%"PRIu64"\n", t);  // t
