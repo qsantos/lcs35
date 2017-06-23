@@ -1,4 +1,5 @@
 #include <gmp.h>
+#include <math.h>
 #include <time.h>
 #include <cpuid.h>
 #include <stdio.h>
@@ -68,7 +69,10 @@ uint64_t powm(uint64_t b, uint64_t e, uint64_t m) {
 double real_clock() {
     /* Clock that measures wall-clock time */
     struct timeval now;
-    gettimeofday(&now, NULL);
+    if (gettimeofday(&now, NULL) != 0) {
+        perror("real_clock()");
+        return NAN;
+    }
     return (double) now.tv_sec + (double) now.tv_usec / 1e6;
 }
 
@@ -92,6 +96,10 @@ size_t getnline(char* s, size_t n, FILE* f) {
 
 int human_time_relative(char* s, size_t n, double secs) {
     /* Format into human-friendly relative time */
+    if (!isfinite(secs)) {
+        return snprintf(s, n, "%f", secs);
+    }
+
     int seconds = (int) secs;
     if (seconds < 2) {
         return snprintf(s, n, "%.1f second", secs);
@@ -130,6 +138,11 @@ int human_time_absolute(char* s, size_t n, double secs) {
     /* Format into human friendly absolute time
      *
      * secs is the number of seconds in the future */
+    if (!isfinite(secs)) {
+        // snprintf() can only fail on an invalid format string
+        return snprintf(s, n, "%f", secs);
+    }
+
     time_t timestamp = time(NULL);
     timestamp += (time_t) secs;
     struct tm* tm = localtime(&timestamp);
@@ -296,7 +309,11 @@ int main(int argc, char** argv) {
         double seconds_left = (double) (t - i) / units_per_second;
         // format estimated remaining time in a human readable manner
         char human_time[1024];
-        human_time_both(human_time, sizeof(human_time), seconds_left);
+        if (isfinite(seconds_left)) {
+            human_time_both(human_time, sizeof(human_time), seconds_left);
+        } else {
+            snprintf(human_time, sizeof(human_time), "unknown");
+        }
         // clear line
         fprintf(stderr, "\r\33[K");
         // show information
