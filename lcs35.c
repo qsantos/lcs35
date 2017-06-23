@@ -21,7 +21,7 @@ size_t get_brand_string(char output[49]) {
 
     // check existence of feature
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    eax = __get_cpuid_max(0x80000000, NULL);
+    eax = (unsigned int) __get_cpuid_max(0x80000000, NULL);
     if (eax < 0x80000004) {
         output[0] = '\0';
         return 0;
