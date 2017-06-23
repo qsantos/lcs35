@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 // C90
+#include <errno.h>
 #include <locale.h>
 #include <math.h>
 #include <stdio.h>
@@ -216,7 +217,14 @@ int main(int argc, char** argv) {
 
     // try to resume
     FILE* f = fopen(savefile, "r");
-    if (f != NULL) {
+    if (f == NULL) {
+        if (errno != ENOENT) {
+            // savefile may exist but another error stops us from reading it
+            perror(NULL);
+            exit(1);
+        }
+        // savefile does not exist, we just use the default values
+    } else {
         // check that savefile is a regular file
         // this is required so that rename() can work properly
         struct stat fileinfo;
