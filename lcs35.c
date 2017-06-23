@@ -84,8 +84,8 @@ size_t getnline(char* s, size_t n, FILE* f) {
     return r;
 }
 
-int eta(char* s, size_t n, double secs) {
-    /* Format remaining time in a human friendly way */
+int human_time_relative(char* s, size_t n, double secs) {
+    /* Format into human-friendly relative time */
     int seconds = (int) secs;
     if (seconds < 2) {
         return snprintf(s, n, "%.1f second", secs);
@@ -118,6 +118,29 @@ int eta(char* s, size_t n, double secs) {
     }
 
     return snprintf(s, n, "%i years %i days", years, days);
+}
+
+int human_time_absolute(char* s, size_t n, double secs) {
+    /* Format into human friendly absolute time
+     *
+     * secs is the number of seconds in the future */
+    time_t timestamp = time(NULL);
+    timestamp += (time_t) secs;
+    struct tm* tm = localtime(&timestamp);
+    if (secs < 86400.) {
+        return (int) strftime(s, n, "%Y-%m-%d %H:%M:%S", tm);
+    } else {
+        return (int) strftime(s, n, "%Y-%m-%d", tm);
+    }
+}
+
+size_t human_time_both(char* s, size_t n, double secs) {
+    size_t n_printed = 0;
+    n_printed += (size_t) human_time_relative(s + n_printed, n - n_printed, secs);
+    n_printed += (size_t) snprintf(s + n_printed, n - n_printed, " (");
+    n_printed += (size_t) human_time_absolute(s + n_printed, n - n_printed, secs);
+    n_printed += (size_t) snprintf(s + n_printed, n - n_printed, ")");
+    return n_printed;
 }
 
 void usage(const char* name) {
@@ -265,24 +288,14 @@ int main(int argc, char** argv) {
         double now = real_clock();
         double units_per_second = (double) (i - prev_i) / (now - prev_time);
         double seconds_left = (double) (t - i) / units_per_second;
-        // format human readable estimated remaining time
-        char eta_buffer[1024];
-        eta(eta_buffer, sizeof(eta_buffer), seconds_left);
-        // format estimated completion date/time
-        time_t timestamp = time(NULL);
-        timestamp += (time_t) seconds_left;
-        struct tm* tm = localtime(&timestamp);
-        char end_date[1024];
-        if (seconds_left < 86400.) {
-            strftime(end_date, sizeof(end_date), "%Y-%m-%d %H:%M:%S", tm);
-        } else {
-            strftime(end_date, sizeof(end_date), "%Y-%m-%d", tm);
-        }
+        // format estimated remaining time in a human readable manner
+        char human_time[1024];
+        human_time_both(human_time, sizeof(human_time), seconds_left);
         // clear line
         fprintf(stderr, "\r\33[K");
         // show information
-        fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s (%s)",
-                (double)i * 100. / (double) t, i, t, eta_buffer, end_date);
+        fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s",
+                (double)i * 100. / (double) t, i, t, human_time);
 
         // update timer
         prev_i = i;
