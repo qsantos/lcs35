@@ -16,7 +16,7 @@
 #define __mingw_choose_expr(C, E1, E2) ((C) ? E1 : E2)
 #endif
 
-size_t get_brand_string(char output[49]) {
+size_t get_brand_string(char output[static 49]) {
     /* Extract CPU brand string from CPUID instruction */
 
     // check existence of feature
