@@ -1,15 +1,22 @@
-#include <gmp.h>
+// C90
+#include <locale.h>
 #include <math.h>
-#include <time.h>
-#include <cpuid.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <locale.h>
+#include <time.h>
+
+// C99
+#include <stdint.h>
 #include <inttypes.h>
+
+// POSIX 2008
 #include <sys/time.h>
 #include <sys/stat.h>
+
+// other
+#include <gmp.h>
+#include <cpuid.h>
 
 // fix: MinGW generates erroneous warning (in fpclassify(), isnan(), signbit())
 #ifdef __MINGW32__
