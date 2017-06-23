@@ -30,7 +30,7 @@ size_t get_brand_string(char output[49]) {
     // obtain brand string by multiple calls to CPUID
     char buffer[48];
     for (unsigned int i = 0; i < 3; i += 1) {
-        __get_cpuid(0x80000002 + i, &eax, &ebx, &ecx, &edx);
+        __cpuid(0x80000002 + i, eax, ebx, ecx, edx);
         ((unsigned int*)buffer)[4*i+0] = eax;
         ((unsigned int*)buffer)[4*i+1] = ebx;
         ((unsigned int*)buffer)[4*i+2] = ecx;
