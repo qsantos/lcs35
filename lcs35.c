@@ -220,11 +220,18 @@ int main(int argc, char** argv) {
         // check that savefile is a regular file
         // this is required so that rename() can work properly
         struct stat fileinfo;
-        stat(savefile, &fileinfo);
+        int ret = fstat(fileno(f), &fileinfo);
+        if (ret < 0) {
+            perror("resuming");
+            exit(1);
+        }
         if (!S_ISREG(fileinfo.st_mode)) {
             fprintf(stderr, "'%s' is not a regular file\n", savefile);
             usage(argv[0]);
         }
+
+        // savefile exist and is a regular file; we may use it to resume the
+        // previous session and to save checkpoints
 
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
