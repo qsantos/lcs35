@@ -86,39 +86,38 @@ size_t getnline(char* s, size_t n, FILE* f) {
 
 size_t eta(char* s, size_t n, double secs) {
     /* Format remaining time in a human friendly way */
-    uint64_t seconds = secs;
+    int seconds = secs;
     if (seconds < 2) {
         return snprintf(s, n, "%.1f second", secs);
     }
 
-    uint64_t minutes = seconds / 60.;
+    int minutes = seconds / 60.;
     seconds %= 60;
     if (minutes < 1) {
-        return snprintf(s, n, "%"PRIu64" seconds", seconds);
+        return snprintf(s, n, "%i seconds", seconds);
     }
 
-    uint64_t hours = minutes / 60;
+    int hours = minutes / 60;
     minutes %= 60;
-    uint64_t days = hours / 24;
+    int days = hours / 24;
     hours %= 24;
     if (days < 1) {
-        return snprintf(s, n, "%02"PRIu64":%02"PRIu64":%02"PRIu64"", hours, minutes, seconds);
+        return snprintf(s, n, "%02i:%02i:%02i", hours, minutes, seconds);
     }
     if (days < 1) {
-        return snprintf(s, n, "1 day %02"PRIu64":%02"PRIu64":%02"PRIu64"", hours, minutes, seconds);
+        return snprintf(s, n, "1 day %02i:%02i:%02i", hours, minutes, seconds);
     }
 
-    uint64_t years = days / 365;
+    int years = days / 365;
     days %= 365;
     if (years < 1) {
-        return snprintf(s, n, "%"PRIu64" days %02"PRIu64":%02"PRIu64":%02"PRIu64"", days, hours, minutes, seconds);
+        return snprintf(s, n, "%i days %02i:%02i:%02i", days, hours, minutes, seconds);
     }
     if (years < 2) {
-        return snprintf(s, n, "1 year %"PRIu64" days", days);
+        return snprintf(s, n, "1 year %i days", days);
     }
 
-    return snprintf(s, n, "%"PRIu64" years %"PRIu64" days", years, days);
-
+    return snprintf(s, n, "%i years %i days", years, days);
 }
 
 void usage(const char* name) {
