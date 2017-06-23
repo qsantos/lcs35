@@ -174,9 +174,9 @@ int main(int argc, char** argv) {
 
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
-        fscanf(f, "%"PRIu64"\n", &t);  // t
-        fscanf(f, "%"PRIu64"\n", &i);  // i
-        fscanf(f, "%"PRIu64"\n", &c);  // i
+        fscanf(f, "%"SCNu64"\n", &t);  // t
+        fscanf(f, "%"SCNu64"\n", &i);  // i
+        fscanf(f, "%"SCNu64"\n", &c);  // c
         // n
         char line[1024];
         getnline(line, sizeof(line), f);
