@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <locale.h>
 #include <inttypes.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -168,6 +169,8 @@ void usage(const char* name) {
 }
 
 int main(int argc, char** argv) {
+    setlocale(LC_ALL, "");
+
     // parse arguments
     const char* savefile = "savefile";
     if (argc == 2) {
