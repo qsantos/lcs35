@@ -9,6 +9,12 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 
+// fix: MinGW generates erroneous warning (in fpclassify(), isnan(), signbit())
+#ifdef __MINGW32__
+#undef __mingw_choose_expr  // set to __builtin_choose_expr in math.h
+#define __mingw_choose_expr(C, E1, E2) ((C) ? E1 : E2)
+#endif
+
 size_t get_brand_string(char output[49]) {
     /* Extract CPU brand string from CPUID instruction */
 
