@@ -286,26 +286,69 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     // this require both files to be on the same filesystem
     char newsavefile[strlen(savefile) + 5];
     snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
+
     FILE* f = fopen(newsavefile, "wb");
+    if (f == NULL) {
+        fprintf(stderr, "Could not open '%s' for writing\n", newsavefile);
+        perror("fopen()");
+        exit(1);
+    }
 
     // each line contains one paramater in ASCII decimal representation
     // in order: t, i, c, n, w
-    fprintf(f, "%"PRIu64"\n", t);  // t
-    fprintf(f, "%"PRIu64"\n", i);  // i
-    fprintf(f, "%"PRIu64"\n", c);  // c
+
+    // t
+    if (fprintf(f, "%"PRIu64"\n", t) < 0) {
+        perror("fprintf(t)");
+        exit(1);
+    }
+
+    // i
+    if (fprintf(f, "%"PRIu64"\n", i) < 0) {
+        perror("fprintf(i)");
+        exit(1);
+    }
+
+    // c
+    if (fprintf(f, "%"PRIu64"\n", c) < 0) {
+        perror("fprintf(c)");
+        exit(1);
+    }
+
     // n
     char* str_n = mpz_get_str(NULL, 10, n);
-    fprintf(f, "%s\n", str_n);
+    if (str_n == NULL) {
+        fprintf(stderr, "Failed to convert n to decimal\n");
+        exit(1);
+    }
+    if (fprintf(f, "%s\n", str_n) < 0) {
+        perror("fprintf(n)");
+        exit(1);
+    }
     free(str_n);
+
     // w
     char* str_w = mpz_get_str(NULL, 10, w);
-    fprintf(f, "%s\n", str_w);
+    if (str_w == NULL) {
+        fprintf(stderr, "Failed to convert w to decimal\n");
+        exit(1);
+    }
+    if (fprintf(f, "%s\n", str_w) < 0) {
+        perror("fprintf(w)");
+        exit(1);
+    }
     free(str_w);
 
-    fclose(f);
+    if (fclose(f) < 0) {
+        perror("fclose()");
+        exit(1);
+    }
 
     // ensure an atomic update using rename()
-    rename(newsavefile, savefile);
+    if (rename(newsavefile, savefile) < 0) {
+        perror("rename()");
+        exit(1);
+    }
 }
 
 void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
