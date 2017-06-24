@@ -187,6 +187,58 @@ void check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     }
 }
 
+int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n, mpz_t w) {
+    /* Resume progress from savefile */
+
+    // first, does the file exists?
+    FILE* f = fopen(savefile, "r");
+    if (f == NULL) {
+        if (errno != ENOENT) {
+            // savefile may exist but another error stops us from reading it
+            perror("resume");
+            exit(1);
+        }
+        // savefile does not exist, nothing to resume
+        return 0;
+    }
+
+    // second, is it a regular file?
+    // this is required so that rename() can work properly
+    struct stat fileinfo;
+    int ret = fstat(fileno(f), &fileinfo);
+    if (ret < 0) {
+        perror("resuming");
+        exit(1);
+    }
+    if (!S_ISREG(fileinfo.st_mode)) {
+        fprintf(stderr, "'%s' is not a regular file\n", savefile);
+        exit(1);
+    }
+
+    // savefile exist and is a regular file; we may use it to resume the
+    // previous session and to save checkpoints
+
+    // each line contains one paramater in ASCII decimal representation
+    // in order: t, i, c, n, w
+    fscanf(f, "%"SCNu64"\n", t);  // t
+    fscanf(f, "%"SCNu64"\n", i);  // i
+    fscanf(f, "%"SCNu64"\n", c);  // c
+    // n
+    char line[1024];
+    getnline(line, sizeof(line), f);
+    mpz_set_str(n, line, 0);
+    // w
+    getnline(line, sizeof(line), f);
+    mpz_set_str(w, line, 0);
+    fclose(f);
+
+    // finally, does the data look good?
+    check_consistency(*i, *c, w);
+
+    // successfully resumed
+    return 1;
+}
+
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
     exit(1);
@@ -229,48 +281,7 @@ int main(int argc, char** argv) {
     mpz_t w;
     mpz_init_set_ui(w, 2);
 
-    // try to resume
-    FILE* f = fopen(savefile, "r");
-    if (f == NULL) {
-        if (errno != ENOENT) {
-            // savefile may exist but another error stops us from reading it
-            perror(NULL);
-            exit(1);
-        }
-        // savefile does not exist, we just use the default values
-    } else {
-        // check that savefile is a regular file
-        // this is required so that rename() can work properly
-        struct stat fileinfo;
-        int ret = fstat(fileno(f), &fileinfo);
-        if (ret < 0) {
-            perror("resuming");
-            exit(1);
-        }
-        if (!S_ISREG(fileinfo.st_mode)) {
-            fprintf(stderr, "'%s' is not a regular file\n", savefile);
-            usage(argv[0]);
-        }
-
-        // savefile exist and is a regular file; we may use it to resume the
-        // previous session and to save checkpoints
-
-        // each line contains one paramater in ASCII decimal representation
-        // in order: t, i, c, n, w
-        fscanf(f, "%"SCNu64"\n", &t);  // t
-        fscanf(f, "%"SCNu64"\n", &i);  // i
-        fscanf(f, "%"SCNu64"\n", &c);  // c
-        // n
-        char line[1024];
-        getnline(line, sizeof(line), f);
-        mpz_set_str(n, line, 0);
-        // w
-        getnline(line, sizeof(line), f);
-        mpz_set_str(w, line, 0);
-        fclose(f);
-
-        check_consistency(i, c, w);
-    }
+    resume(savefile, &t, &i, &c, n, w);
 
     // We exploit a trick offered by Shamir to detect computation errors
     // c is a small prime number (e.g. 32 bits)
@@ -305,7 +316,7 @@ int main(int argc, char** argv) {
         // this require both files to be on the same filesystem
         char newsavefile[strlen(savefile) + 5];
         snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
-        f = fopen(newsavefile, "wb");
+        FILE* f = fopen(newsavefile, "wb");
         // each line contains one paramater in ASCII decimal representation
         // in order: t, i, c, n, w
         fprintf(f, "%"PRIu64"\n", t);  // t
