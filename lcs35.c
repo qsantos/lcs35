@@ -81,7 +81,7 @@ double real_clock() {
     /* Clock that measures wall-clock time */
     struct timeval now;
     if (gettimeofday(&now, NULL) != 0) {
-        perror("real_clock()");
+        perror("gettimeofday()");
         return NAN;
     }
     return (double) now.tv_sec + (double) now.tv_usec / 1e6;
@@ -195,7 +195,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     if (f == NULL) {
         if (errno != ENOENT) {
             // savefile may exist but another error stops us from reading it
-            perror("resume");
+            perror("fopen()");
             exit(1);
         }
         // savefile does not exist, nothing to resume
@@ -207,7 +207,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     struct stat fileinfo;
     int ret = fstat(fileno(f), &fileinfo);
     if (ret < 0) {
-        perror("resuming");
+        perror("fstat()");
         exit(1);
     }
     if (!S_ISREG(fileinfo.st_mode)) {
