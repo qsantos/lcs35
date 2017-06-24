@@ -373,6 +373,7 @@ int main(int argc, char** argv) {
     mpz_mod(w, w, n);
     char* str_w = mpz_get_str(NULL, 10, w);
     fprintf(stderr, "w = %s\n", str_w);
+    free(str_w);
 
     // clean up
     mpz_clear(n_times_c);
