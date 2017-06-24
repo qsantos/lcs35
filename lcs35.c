@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 // C90
 #include <locale.h>
 #include <math.h>
