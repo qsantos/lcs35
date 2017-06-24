@@ -350,6 +350,7 @@ int main(int argc, char** argv) {
     // initialize timer
     uint64_t prev_i = i;
     double prev_time = real_clock();
+    show_progress(i, t, &prev_i, &prev_time);
 
     while (i < t) {
         uint64_t stepsize = min(t - i, 1ULL<<20);
