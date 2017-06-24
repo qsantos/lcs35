@@ -285,7 +285,6 @@ void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) 
     }
 
     double progress = 100. * (double) i / (double) t;  // progress percentage
-    fprintf(stderr, "\r\33[K");  // clear line
     fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s", progress, i, t, human_time);
 
     // update timer
@@ -363,6 +362,9 @@ int main(int argc, char** argv) {
         mpz_clear(tmp);
 
         i += stepsize;
+
+        // clear line in case errors are to be printed
+        fprintf(stderr, "\r\33[K");
 
         check_consistency(i, c, w);
         checkpoint(savefile, t, i, c, n, w);
