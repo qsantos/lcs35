@@ -460,6 +460,10 @@ int main(int argc, char** argv) {
     fprintf(stderr, "\rCalculation complete.\n");
     mpz_mod(w, w, n);
     char* str_w = mpz_get_str(NULL, 10, w);
+    if (str_w == NULL) {
+        fprintf(stderr, "Failed to convert w to decimal\n");
+        exit(1);
+    }
     fprintf(stderr, "w = %s\n", str_w);
     free(str_w);
 
