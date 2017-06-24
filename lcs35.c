@@ -220,17 +220,57 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
 
     // each line contains one paramater in ASCII decimal representation
     // in order: t, i, c, n, w
-    fscanf(f, "%"SCNu64"\n", t);  // t
-    fscanf(f, "%"SCNu64"\n", i);  // i
-    fscanf(f, "%"SCNu64"\n", c);  // c
-    // n
+
+    // t
+    if (fscanf(f, "%"SCNu64"\n", t) < 0) {
+        if (errno == 0) {
+            fprintf(stderr, "Unexpected end of file while reading t\n");
+        } else {
+            perror("fscanf(t)");
+        }
+        exit(1);
+    }
+
+    // i
+    if (fscanf(f, "%"SCNu64"\n", i) < 0) {
+        if (errno == 0) {
+            fprintf(stderr, "Unexpected end of file while reading i\n");
+        } else {
+            perror("fscanf(i)");
+        }
+        exit(1);
+    }
+
+    // c
+    if (fscanf(f, "%"SCNu64"\n", c) < 0) {
+        if (errno == 0) {
+            fprintf(stderr, "Unexpected end of file while reading c\n");
+        } else {
+            perror("fscanf(c)");
+        }
+        exit(1);
+    }
+
     char line[1024];
+
+    // n
     getnline(line, sizeof(line), f);
-    mpz_set_str(n, line, 0);
+    if (mpz_set_str(n, line, 10) < 0) {
+        fprintf(stderr, "Invalid decimal number n = %s\n", line);
+        exit(1);
+    }
+
     // w
     getnline(line, sizeof(line), f);
-    mpz_set_str(w, line, 0);
-    fclose(f);
+    if (mpz_set_str(w, line, 10) < 0) {
+        fprintf(stderr, "Invalid decimal number w = %s\n", line);
+        exit(1);
+    }
+
+    if (fclose(f) < 0) {
+        perror("fclose()");
+        exit(1);
+    }
 
     // finally, does the data look good?
     check_consistency(*i, *c, w);
