@@ -268,6 +268,31 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     rename(newsavefile, savefile);
 }
 
+void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
+    /* Show progress */
+
+    // compute remaining time in seconds
+    double now = real_clock();
+    double units_per_second = (double) (i - *prev_i) / (now - *prev_time);
+    double seconds_left = (double) (t - i) / units_per_second;
+
+    // format estimated remaining time in a human readable manner
+    char human_time[1024];
+    if (isfinite(seconds_left)) {
+        human_time_both(human_time, sizeof(human_time), seconds_left);
+    } else {
+        snprintf(human_time, sizeof(human_time), "unknown");
+    }
+
+    double progress = 100. * (double) i / (double) t;  // progress percentage
+    fprintf(stderr, "\r\33[K");  // clear line
+    fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s", progress, i, t, human_time);
+
+    // update timer
+    *prev_i = i;
+    *prev_time = now;
+}
+
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
     exit(1);
@@ -340,28 +365,7 @@ int main(int argc, char** argv) {
 
         check_consistency(i, c, w);
         checkpoint(savefile, t, i, c, n, w);
-
-        /* display progress */
-        // compute remaining time in seconds
-        double now = real_clock();
-        double units_per_second = (double) (i - prev_i) / (now - prev_time);
-        double seconds_left = (double) (t - i) / units_per_second;
-        // format estimated remaining time in a human readable manner
-        char human_time[1024];
-        if (isfinite(seconds_left)) {
-            human_time_both(human_time, sizeof(human_time), seconds_left);
-        } else {
-            snprintf(human_time, sizeof(human_time), "unknown");
-        }
-        // clear line
-        fprintf(stderr, "\r\33[K");
-        // show information
-        fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s",
-                (double)i * 100. / (double) t, i, t, human_time);
-
-        // update timer
-        prev_i = i;
-        prev_time = now;
+        show_progress(i, t, &prev_i, &prev_time);
     }
 
     // one can only dream...
