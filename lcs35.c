@@ -173,6 +173,20 @@ size_t human_time_both(char* s, size_t n, double secs) {
     return n_printed;
 }
 
+void check_consistency(uint64_t i, uint64_t c, mpz_t w) {
+    /* Consistency check of w using prime factor c of n */
+    // because c is prime:
+    // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
+    uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
+    uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
+    uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
+    if (w_mod_c != check) {
+        fprintf(stderr, "Inconsistency detected\n");
+        fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
+        exit(1);
+    }
+}
+
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
     exit(1);
@@ -255,17 +269,7 @@ int main(int argc, char** argv) {
         mpz_set_str(w, line, 0);
         fclose(f);
 
-        // consistency check
-        // because c is prime:
-        // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-        uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
-        uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
-        uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
-        if (w_mod_c != check) {
-            fprintf(stderr, "Inconsistency detected in savefile\n");
-            fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
-            exit(1);
-        }
+        check_consistency(i, c, w);
     }
 
     // We exploit a trick offered by Shamir to detect computation errors
@@ -294,17 +298,7 @@ int main(int argc, char** argv) {
 
         i += stepsize;
 
-        // consistency check
-        // because c is prime:
-        // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-        uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
-        uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
-        uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
-        if (w_mod_c != check) {
-            fprintf(stderr, "Inconsistency detected\n");
-            fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
-            exit(1);
-        }
+        check_consistency(i, c, w);
 
         // save progress
         // write in temporary file for atomic updates using rename()
