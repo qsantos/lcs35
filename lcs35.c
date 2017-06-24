@@ -239,6 +239,35 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     return 1;
 }
 
+void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
+    /* Save progress into savefile*/
+
+    // write in temporary file for atomic updates using rename()
+    // this require both files to be on the same filesystem
+    char newsavefile[strlen(savefile) + 5];
+    snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
+    FILE* f = fopen(newsavefile, "wb");
+
+    // each line contains one paramater in ASCII decimal representation
+    // in order: t, i, c, n, w
+    fprintf(f, "%"PRIu64"\n", t);  // t
+    fprintf(f, "%"PRIu64"\n", i);  // i
+    fprintf(f, "%"PRIu64"\n", c);  // c
+    // n
+    char* str_n = mpz_get_str(NULL, 10, n);
+    fprintf(f, "%s\n", str_n);
+    free(str_n);
+    // w
+    char* str_w = mpz_get_str(NULL, 10, w);
+    fprintf(f, "%s\n", str_w);
+    free(str_w);
+
+    fclose(f);
+
+    // ensure an atomic update using rename()
+    rename(newsavefile, savefile);
+}
+
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
     exit(1);
@@ -310,29 +339,7 @@ int main(int argc, char** argv) {
         i += stepsize;
 
         check_consistency(i, c, w);
-
-        // save progress
-        // write in temporary file for atomic updates using rename()
-        // this require both files to be on the same filesystem
-        char newsavefile[strlen(savefile) + 5];
-        snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
-        FILE* f = fopen(newsavefile, "wb");
-        // each line contains one paramater in ASCII decimal representation
-        // in order: t, i, c, n, w
-        fprintf(f, "%"PRIu64"\n", t);  // t
-        fprintf(f, "%"PRIu64"\n", i);  // i
-        fprintf(f, "%"PRIu64"\n", c);  // c
-        // n
-        char* str_n = mpz_get_str(NULL, 10, n);
-        fprintf(f, "%s\n", str_n);
-        free(str_n);
-        // w
-        char* str_w = mpz_get_str(NULL, 10, w);
-        fprintf(f, "%s\n", str_w);
-        free(str_w);
-        // ensure an atomic update using rename()
-        fclose(f);
-        rename(newsavefile, savefile);
+        checkpoint(savefile, t, i, c, n, w);
 
         /* display progress */
         // compute remaining time in seconds
