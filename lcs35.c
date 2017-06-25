@@ -77,7 +77,7 @@ uint64_t powm(uint64_t b, uint64_t e, uint64_t m) {
     return r;
 }
 
-double real_clock() {
+double real_clock(void) {
     /* Clock that measures wall-clock time */
     struct timeval now;
     if (gettimeofday(&now, NULL) != 0) {
