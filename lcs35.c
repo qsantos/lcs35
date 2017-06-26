@@ -207,7 +207,7 @@ void check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     if (w_mod_c != check) {
         fprintf(stderr, "Inconsistency detected\n");
         fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -220,7 +220,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         if (errno != ENOENT) {
             // savefile may exist but another error stops us from reading it
             perror("fopen()");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         // savefile does not exist, nothing to resume
         return 0;
@@ -232,11 +232,11 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     int ret = fstat(fileno(f), &fileinfo);
     if (ret < 0) {
         perror("fstat()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     if (!S_ISREG(fileinfo.st_mode)) {
         fprintf(stderr, "'%s' is not a regular file\n", savefile);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // savefile exist and is a regular file; we may use it to resume the
@@ -252,7 +252,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(t)");
         }
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // i
@@ -262,7 +262,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(i)");
         }
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // c
@@ -272,7 +272,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(c)");
         }
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     char line[1024];
@@ -281,19 +281,19 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     getnline(line, sizeof(line), f);
     if (mpz_set_str(n, line, 10) < 0) {
         fprintf(stderr, "Invalid decimal number n = %s\n", line);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // w
     getnline(line, sizeof(line), f);
     if (mpz_set_str(w, line, 10) < 0) {
         fprintf(stderr, "Invalid decimal number w = %s\n", line);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (fclose(f) < 0) {
         perror("fclose()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // finally, does the data look good?
@@ -315,7 +315,7 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     if (f == NULL) {
         fprintf(stderr, "Could not open '%s' for writing\n", newsavefile);
         perror("fopen()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // each line contains one paramater in ASCII decimal representation
@@ -324,30 +324,30 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     // t
     if (fprintf(f, "%"PRIu64"\n", t) < 0) {
         perror("fprintf(t)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // i
     if (fprintf(f, "%"PRIu64"\n", i) < 0) {
         perror("fprintf(i)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // c
     if (fprintf(f, "%"PRIu64"\n", c) < 0) {
         perror("fprintf(c)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // n
     char* str_n = mpz_get_str(NULL, 10, n);
     if (str_n == NULL) {
         fprintf(stderr, "Failed to convert n to decimal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     if (fprintf(f, "%s\n", str_n) < 0) {
         perror("fprintf(n)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     free(str_n);
 
@@ -355,11 +355,11 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     char* str_w = mpz_get_str(NULL, 10, w);
     if (str_w == NULL) {
         fprintf(stderr, "Failed to convert w to decimal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     if (fprintf(f, "%s\n", str_w) < 0) {
         perror("fprintf(w)");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     free(str_w);
 
@@ -369,7 +369,7 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
 
     if (fclose(f) < 0) {
         perror("fclose()");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // ensure an atomic update using rename() on POSIX systems
@@ -382,15 +382,15 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
             // by themselves
             if (remove(savefile) < 0) {
                 perror("remove()");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             if (rename(newsavefile, savefile) < 0) {
                 perror("rename() 2");
-                exit(1);
+                exit(EXIT_FAILURE);
             }
         } else {
             perror("rename()");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
 }
@@ -421,7 +421,7 @@ void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) 
 
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 int main(int argc, char** argv) {
@@ -506,7 +506,7 @@ int main(int argc, char** argv) {
     char* str_w = mpz_get_str(NULL, 10, w);
     if (str_w == NULL) {
         fprintf(stderr, "Failed to convert w to decimal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     fprintf(stderr, "w = %s\n", str_w);
     free(str_w);
@@ -515,5 +515,5 @@ int main(int argc, char** argv) {
     mpz_clear(n_times_c);
     mpz_clear(w);
     mpz_clear(n);
-    return 0;
+    return EXIT_SUCCESS;
 }
