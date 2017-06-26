@@ -372,10 +372,26 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
         exit(1);
     }
 
-    // ensure an atomic update using rename()
+    // ensure an atomic update using rename() on POSIX systems
     if (rename(newsavefile, savefile) < 0) {
-        perror("rename()");
-        exit(1);
+        if (errno == EEXIST) {
+            // on non-POSIX systems (i.e. Windows), `rename()` might not accept
+            // to replace existing `oldpath` with `newpath`; we will have to
+            // hope that `remove()` followed by `rename()` is sufficient; if a
+            // crash happen in between, the user will have to rename the file
+            // by themselves
+            if (remove(savefile) < 0) {
+                perror("remove()");
+                exit(1);
+            }
+            if (rename(newsavefile, savefile) < 0) {
+                perror("rename() 2");
+                exit(1);
+            }
+        } else {
+            perror("rename()");
+            exit(1);
+        }
     }
 }
 
