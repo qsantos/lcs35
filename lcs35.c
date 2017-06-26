@@ -16,6 +16,7 @@
 // POSIX 2008
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // other
 #include <gmp.h>
@@ -25,6 +26,29 @@
 #ifdef __MINGW32__
 #undef __mingw_choose_expr  // set to __builtin_choose_expr in math.h
 #define __mingw_choose_expr(C, E1, E2) ((C) ? E1 : E2)
+#endif
+
+// fsync() for Windows
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+int fsync(int fd) {
+    HANDLE handle = (HANDLE) _get_osfhandle(fd);
+    if (handle == INVALID_HANDLE_VALUE) {
+        errno = EBADF;
+        return -1;
+    }
+    if (FlushFileBuffers(handle) == 0) {
+        if (GetLastError() == ERROR_INVALID_HANDLE) {
+            errno = EBADF;
+        } else {
+            errno = EIO;
+        }
+        return -1;
+    }
+    return 0;
+}
 #endif
 
 size_t get_brand_string(char output[static 49]) {
@@ -338,6 +362,10 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
         exit(1);
     }
     free(str_w);
+
+    // actually write to disk before replacing previous files
+    fflush(f);  // flush user-space buffers
+    fsync(fileno(f));  // flush kernel buffers and disk cache
 
     if (fclose(f) < 0) {
         perror("fclose()");
