@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,27 @@ int fsync(int fd) {
         return -1;
     }
     return 0;
+}
+#endif
+
+#ifndef _GNU_SOURCE
+static int asprintf(char** strp, const char* fmt, ...) {
+    va_list ap1, ap2;
+    va_start(ap1, fmt);
+    va_copy(ap2, ap1);
+
+    size_t n_bytes = (size_t) vsnprintf(NULL, 0, fmt, ap1) + 1;
+    va_end(ap1);
+
+    *strp = malloc(n_bytes);
+    if (*strp == NULL) {
+        perror("malloc()");
+        exit(EXIT_FAILURE);
+    }
+
+    int ret = vsnprintf(*strp, n_bytes, fmt, ap2);
+    va_end(ap2);
+    return ret;
 }
 #endif
 
@@ -308,13 +330,8 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    size_t n_newsavefile = strlen(savefile) + 5;
-    char* newsavefile = malloc(n_newsavefile);
-    if (newsavefile == NULL) {
-        perror("malloc()");
-        exit(EXIT_FAILURE);
-    }
-    snprintf(newsavefile, sizeof(n_newsavefile), "%s.new", savefile);
+    char* newsavefile;
+    asprintf(&newsavefile, "%s.new", savefile);
 
     FILE* f = fopen(newsavefile, "wb");
     if (f == NULL) {
