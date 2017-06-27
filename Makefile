@@ -11,9 +11,7 @@ lcs35: lcs35.c
 
 clean:
 
-destroy: clean
-	rm -f $(TARGETS)
+run: all
+	./$(TARGETS)
 
-rebuild: destroy all
-
-.PHONY: all clean destroy rebuild
+.PHONY: all clean run
