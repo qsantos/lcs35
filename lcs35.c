@@ -308,8 +308,13 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    char newsavefile[strlen(savefile) + 5];
-    snprintf(newsavefile, sizeof(newsavefile), "%s.new", savefile);
+    size_t n_newsavefile = strlen(savefile) + 5;
+    char* newsavefile = malloc(n_newsavefile);
+    if (newsavefile == NULL) {
+        perror("malloc()");
+        exit(EXIT_FAILURE);
+    }
+    snprintf(newsavefile, sizeof(n_newsavefile), "%s.new", savefile);
 
     FILE* f = fopen(newsavefile, "wb");
     if (f == NULL) {
@@ -393,6 +398,8 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
             exit(EXIT_FAILURE);
         }
     }
+
+    free(newsavefile);
 }
 
 void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
