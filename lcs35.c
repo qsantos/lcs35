@@ -325,14 +325,12 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     return 1;
 }
 
-void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
+void checkpoint(const char* savefile, const char* tmpfile,
+                uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
     /* Save progress into savefile*/
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    char* tmpfile;
-    asprintf(&tmpfile, "%s.new", savefile);
-
     FILE* f = fopen(tmpfile, "wb");
     if (f == NULL) {
         fprintf(stderr, "Could not open '%s' for writing\n", tmpfile);
@@ -415,8 +413,6 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
             exit(EXIT_FAILURE);
         }
     }
-
-    free(tmpfile);
 }
 
 void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
@@ -458,6 +454,10 @@ int main(int argc, char** argv) {
     if (argc == 2) {
         savefile = argv[1];
     }
+
+    // prepare name of intermediate file used for atomic updates
+    char* tmpfile;
+    asprintf(&tmpfile, "%s.new", savefile);
 
     // display brand string
     char brand_string[49];
@@ -520,7 +520,7 @@ int main(int argc, char** argv) {
         fprintf(stderr, "\r\33[K");
 
         check_consistency(i, c, w);
-        checkpoint(savefile, t, i, c, n, w);
+        checkpoint(savefile, tmpfile, t, i, c, n, w);
         show_progress(i, t, &prev_i, &prev_time);
     }
 
@@ -539,5 +539,6 @@ int main(int argc, char** argv) {
     mpz_clear(n_times_c);
     mpz_clear(w);
     mpz_clear(n);
+    free(tmpfile);
     return EXIT_SUCCESS;
 }
