@@ -330,12 +330,12 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    char* newsavefile;
-    asprintf(&newsavefile, "%s.new", savefile);
+    char* tmpfile;
+    asprintf(&tmpfile, "%s.new", savefile);
 
-    FILE* f = fopen(newsavefile, "wb");
+    FILE* f = fopen(tmpfile, "wb");
     if (f == NULL) {
-        fprintf(stderr, "Could not open '%s' for writing\n", newsavefile);
+        fprintf(stderr, "Could not open '%s' for writing\n", tmpfile);
         perror("fopen()");
         exit(EXIT_FAILURE);
     }
@@ -395,7 +395,7 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
     }
 
     // ensure an atomic update using rename() on POSIX systems
-    if (rename(newsavefile, savefile) < 0) {
+    if (rename(tmpfile, savefile) < 0) {
         if (errno == EEXIST) {
             // on non-POSIX systems (i.e. Windows), `rename()` might not accept
             // to replace existing `oldpath` with `newpath`; we will have to
@@ -406,7 +406,7 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
                 perror("remove()");
                 exit(EXIT_FAILURE);
             }
-            if (rename(newsavefile, savefile) < 0) {
+            if (rename(tmpfile, savefile) < 0) {
                 perror("rename() 2");
                 exit(EXIT_FAILURE);
             }
@@ -416,7 +416,7 @@ void checkpoint(const char* savefile, uint64_t t, uint64_t i, uint64_t c, mpz_t 
         }
     }
 
-    free(newsavefile);
+    free(tmpfile);
 }
 
 void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
