@@ -64,7 +64,7 @@ static int asprintf(char** strp, const char* fmt, ...) {
     *strp = malloc(n_bytes);
     if (*strp == NULL) {
         perror("malloc()");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     int ret = vsnprintf(*strp, n_bytes, fmt, ap2);
@@ -219,7 +219,7 @@ size_t human_time_both(char* s, size_t n, double secs) {
     return n_printed;
 }
 
-void check_consistency(uint64_t i, uint64_t c, mpz_t w) {
+int check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     /* Consistency check of w using prime factor c of n */
     // because c is prime:
     // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
@@ -229,12 +229,17 @@ void check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     if (w_mod_c != check) {
         fprintf(stderr, "Inconsistency detected\n");
         fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
-        exit(EXIT_FAILURE);
+        return -1;
     }
+    return 0;
 }
 
 int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n, mpz_t w) {
-    /* Resume progress from savefile */
+    /* Resume progress from savefile
+     *
+     * returns 1 if session was resumed
+     * returns 0 if no session was found
+     * returns -1 if an error was encountered */
 
     // first, does the file exists?
     FILE* f = fopen(savefile, "r");
@@ -242,7 +247,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         if (errno != ENOENT) {
             // savefile may exist but another error stops us from reading it
             perror("fopen()");
-            exit(EXIT_FAILURE);
+            return -1;
         }
         // savefile does not exist, nothing to resume
         return 0;
@@ -254,11 +259,11 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     int ret = fstat(fileno(f), &fileinfo);
     if (ret < 0) {
         perror("fstat()");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     if (!S_ISREG(fileinfo.st_mode)) {
         fprintf(stderr, "'%s' is not a regular file\n", savefile);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // savefile exist and is a regular file; we may use it to resume the
@@ -274,7 +279,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(t)");
         }
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // i
@@ -284,7 +289,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(i)");
         }
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // c
@@ -294,7 +299,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
         } else {
             perror("fscanf(c)");
         }
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     char line[1024];
@@ -303,31 +308,34 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     getnline(line, sizeof(line), f);
     if (mpz_set_str(n, line, 10) < 0) {
         fprintf(stderr, "Invalid decimal number n = %s\n", line);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // w
     getnline(line, sizeof(line), f);
     if (mpz_set_str(w, line, 10) < 0) {
         fprintf(stderr, "Invalid decimal number w = %s\n", line);
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if (fclose(f) < 0) {
         perror("fclose()");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // finally, does the data look good?
-    check_consistency(*i, *c, w);
+    if (check_consistency(*i, *c, w) < 0) {
+        fprintf(stderr, "Data from the previous session looks incorrect\n");
+        return -1;
+    }
 
     // successfully resumed
     return 1;
 }
 
-void checkpoint(const char* savefile, const char* tmpfile,
-                uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
-    /* Save progress into savefile*/
+int checkpoint(const char* savefile, const char* tmpfile,
+               uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
+    /* Save progress into savefile */
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
@@ -335,7 +343,7 @@ void checkpoint(const char* savefile, const char* tmpfile,
     if (f == NULL) {
         fprintf(stderr, "Could not open '%s' for writing\n", tmpfile);
         perror("fopen()");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // each line contains one paramater in ASCII decimal representation
@@ -344,30 +352,30 @@ void checkpoint(const char* savefile, const char* tmpfile,
     // t
     if (fprintf(f, "%"PRIu64"\n", t) < 0) {
         perror("fprintf(t)");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // i
     if (fprintf(f, "%"PRIu64"\n", i) < 0) {
         perror("fprintf(i)");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // c
     if (fprintf(f, "%"PRIu64"\n", c) < 0) {
         perror("fprintf(c)");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // n
     char* str_n = mpz_get_str(NULL, 10, n);
     if (str_n == NULL) {
         fprintf(stderr, "Failed to convert n to decimal\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     if (fprintf(f, "%s\n", str_n) < 0) {
         perror("fprintf(n)");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     free(str_n);
 
@@ -375,11 +383,11 @@ void checkpoint(const char* savefile, const char* tmpfile,
     char* str_w = mpz_get_str(NULL, 10, w);
     if (str_w == NULL) {
         fprintf(stderr, "Failed to convert w to decimal\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     if (fprintf(f, "%s\n", str_w) < 0) {
         perror("fprintf(w)");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     free(str_w);
 
@@ -389,7 +397,7 @@ void checkpoint(const char* savefile, const char* tmpfile,
 
     if (fclose(f) < 0) {
         perror("fclose()");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     // ensure an atomic update using rename() on POSIX systems
@@ -402,17 +410,19 @@ void checkpoint(const char* savefile, const char* tmpfile,
             // by themselves
             if (remove(savefile) < 0) {
                 perror("remove()");
-                exit(EXIT_FAILURE);
+                return -1;
             }
             if (rename(tmpfile, savefile) < 0) {
                 perror("rename() 2");
-                exit(EXIT_FAILURE);
+                return -1;
             }
         } else {
             perror("rename()");
-            exit(EXIT_FAILURE);
+            return -1;
         }
     }
+
+    return 0;
 }
 
 void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
@@ -457,7 +467,11 @@ int main(int argc, char** argv) {
 
     // prepare name of intermediate file used for atomic updates
     char* tmpfile;
-    asprintf(&tmpfile, "%s.new", savefile);
+    int ret = asprintf(&tmpfile, "%s.new", savefile);
+    if (ret < 0) {
+        fprintf(stderr, "Could not prepare name for intermediate file\n");
+        exit(EXIT_FAILURE);
+    }
 
     // display brand string
     char brand_string[49];
@@ -487,7 +501,10 @@ int main(int argc, char** argv) {
     mpz_t w;
     mpz_init_set_ui(w, 2);
 
-    resume(savefile, &t, &i, &c, n, w);
+    if (resume(savefile, &t, &i, &c, n, w) < 0) {
+        fprintf(stderr, "An error happened while resuming previous session\n");
+        exit(EXIT_FAILURE);
+    }
 
     // We exploit a trick offered by Shamir to detect computation errors
     // c is a small prime number (e.g. 32 bits)
@@ -519,8 +536,14 @@ int main(int argc, char** argv) {
         // clear line in case errors are to be printed
         fprintf(stderr, "\r\33[K");
 
-        check_consistency(i, c, w);
-        checkpoint(savefile, tmpfile, t, i, c, n, w);
+        if (check_consistency(i, c, w) < 0) {
+            fprintf(stderr, "An error happened during computation\n");
+            exit(EXIT_FAILURE);
+        }
+        if (checkpoint(savefile, tmpfile, t, i, c, n, w) < 0) {
+            fprintf(stderr, "Failed to save checkpoint!\n");
+            exit(EXIT_FAILURE);
+        }
         show_progress(i, t, &prev_i, &prev_time);
     }
 
