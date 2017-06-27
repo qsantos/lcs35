@@ -29,6 +29,22 @@
 #define __mingw_choose_expr(C, E1, E2) ((C) ? E1 : E2)
 #endif
 
+enum log_level {
+    FATAL,
+    ERR,
+    WARN,
+    INFO,
+    DEBUG,
+};
+int debug_level = INFO;
+#define LOG(level, ...) do { \
+        if (level <= debug_level) { \
+            fprintf(stderr, #level " %s:%i: ", __FILE__, __LINE__); \
+            fprintf(stderr, __VA_ARGS__); \
+            fprintf(stderr, "\n"); \
+        } \
+    } while (0)
+
 // fsync() for Windows
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -63,7 +79,7 @@ static int asprintf(char** strp, const char* fmt, ...) {
 
     *strp = malloc(n_bytes);
     if (*strp == NULL) {
-        perror("malloc()");
+        LOG(INFO, "could not allocate memory (%s)", strerror(errno));
         return -1;
     }
 
@@ -127,7 +143,7 @@ double real_clock(void) {
     /* Clock that measures wall-clock time */
     struct timeval now;
     if (gettimeofday(&now, NULL) != 0) {
-        perror("gettimeofday()");
+        LOG(WARN, "could not read current time (%s)", strerror(errno));
         return NAN;
     }
     return (double) now.tv_sec + (double) now.tv_usec / 1e6;
@@ -227,8 +243,7 @@ int check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
     uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
     if (w_mod_c != check) {
-        fprintf(stderr, "Inconsistency detected\n");
-        fprintf(stderr, "%"PRIu64" != %"PRIu64"\n", check, w_mod_c);
+        LOG(WARN, "inconsistency detected (%"PRIu64" != %"PRIu64")", check, w_mod_c);
         return -1;
     }
     return 0;
@@ -246,7 +261,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     if (f == NULL) {
         if (errno != ENOENT) {
             // savefile may exist but another error stops us from reading it
-            perror("fopen()");
+            LOG(WARN, "could not open '%s' for reading (%s)", savefile, strerror(errno));
             return -1;
         }
         // savefile does not exist, nothing to resume
@@ -258,11 +273,11 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     struct stat fileinfo;
     int ret = fstat(fileno(f), &fileinfo);
     if (ret < 0) {
-        perror("fstat()");
+        LOG(WARN, "could not stat '%s' (%s)", savefile, strerror(errno));
         return -1;
     }
     if (!S_ISREG(fileinfo.st_mode)) {
-        fprintf(stderr, "'%s' is not a regular file\n", savefile);
+        LOG(WARN, "'%s' is not a regular file", savefile);
         return -1;
     }
 
@@ -275,9 +290,9 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     // t
     if (fscanf(f, "%"SCNu64"\n", t) < 0) {
         if (errno == 0) {
-            fprintf(stderr, "Unexpected end of file while reading t\n");
+            LOG(WARN, "unexpected end of file while reading t");
         } else {
-            perror("fscanf(t)");
+            LOG(WARN, "failed to scan t (%s)", strerror(errno));
         }
         return -1;
     }
@@ -285,9 +300,9 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     // i
     if (fscanf(f, "%"SCNu64"\n", i) < 0) {
         if (errno == 0) {
-            fprintf(stderr, "Unexpected end of file while reading i\n");
+            LOG(WARN, "unexpected end of file while reading i");
         } else {
-            perror("fscanf(i)");
+            LOG(WARN, "failed to scan i (%s)", strerror(errno));
         }
         return -1;
     }
@@ -295,9 +310,9 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     // c
     if (fscanf(f, "%"SCNu64"\n", c) < 0) {
         if (errno == 0) {
-            fprintf(stderr, "Unexpected end of file while reading c\n");
+            LOG(WARN, "unexpected end of file while reading c");
         } else {
-            perror("fscanf(c)");
+            LOG(WARN, "failed to scan c (%s)", strerror(errno));
         }
         return -1;
     }
@@ -307,25 +322,25 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     // n
     getnline(line, sizeof(line), f);
     if (mpz_set_str(n, line, 10) < 0) {
-        fprintf(stderr, "Invalid decimal number n = %s\n", line);
+        LOG(WARN, "invalid decimal number n = %s", line);
         return -1;
     }
 
     // w
     getnline(line, sizeof(line), f);
     if (mpz_set_str(w, line, 10) < 0) {
-        fprintf(stderr, "Invalid decimal number w = %s\n", line);
+        LOG(WARN, "invalid decimal number w = %s", line);
         return -1;
     }
 
     if (fclose(f) < 0) {
-        perror("fclose()");
+        LOG(WARN, "failed to close '%s' (%s)", savefile, strerror(errno));
         return -1;
     }
 
     // finally, does the data look good?
     if (check_consistency(*i, *c, w) < 0) {
-        fprintf(stderr, "Data from the previous session looks incorrect\n");
+        LOG(WARN, "data from the '%s' looks incorrect", savefile);
         return -1;
     }
 
@@ -341,8 +356,7 @@ int checkpoint(const char* savefile, const char* tmpfile,
     // this require both files to be on the same filesystem
     FILE* f = fopen(tmpfile, "wb");
     if (f == NULL) {
-        fprintf(stderr, "Could not open '%s' for writing\n", tmpfile);
-        perror("fopen()");
+        LOG(WARN, "could not open '%s' for writing (%s)", tmpfile, strerror(errno));
         return -1;
     }
 
@@ -351,30 +365,30 @@ int checkpoint(const char* savefile, const char* tmpfile,
 
     // t
     if (fprintf(f, "%"PRIu64"\n", t) < 0) {
-        perror("fprintf(t)");
+        LOG(WARN, "could not write t to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // i
     if (fprintf(f, "%"PRIu64"\n", i) < 0) {
-        perror("fprintf(i)");
+        LOG(WARN, "could not write i to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // c
     if (fprintf(f, "%"PRIu64"\n", c) < 0) {
-        perror("fprintf(c)");
+        LOG(WARN, "could not write c to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // n
     char* str_n = mpz_get_str(NULL, 10, n);
     if (str_n == NULL) {
-        fprintf(stderr, "Failed to convert n to decimal\n");
+        LOG(WARN, "failed to convert n to decimal");
         return -1;
     }
     if (fprintf(f, "%s\n", str_n) < 0) {
-        perror("fprintf(n)");
+        LOG(WARN, "failed to write n to temporary file (%s)", strerror(errno));
         return -1;
     }
     free(str_n);
@@ -382,11 +396,11 @@ int checkpoint(const char* savefile, const char* tmpfile,
     // w
     char* str_w = mpz_get_str(NULL, 10, w);
     if (str_w == NULL) {
-        fprintf(stderr, "Failed to convert w to decimal\n");
+        LOG(WARN, "failed to convert w to decimal");
         return -1;
     }
     if (fprintf(f, "%s\n", str_w) < 0) {
-        perror("fprintf(w)");
+        LOG(WARN, "failed to write w to temporary file (%s)", strerror(errno));
         return -1;
     }
     free(str_w);
@@ -396,7 +410,7 @@ int checkpoint(const char* savefile, const char* tmpfile,
     fsync(fileno(f));  // flush kernel buffers and disk cache
 
     if (fclose(f) < 0) {
-        perror("fclose()");
+        LOG(WARN, "failed to close '%s' (%s)", tmpfile, strerror(errno));
         return -1;
     }
 
@@ -409,15 +423,18 @@ int checkpoint(const char* savefile, const char* tmpfile,
             // crash happen in between, the user will have to rename the file
             // by themselves
             if (remove(savefile) < 0) {
-                perror("remove()");
+                LOG(WARN, "failed to remove '%s' for replacement (%s)",
+                         savefile, strerror(errno));
                 return -1;
             }
             if (rename(tmpfile, savefile) < 0) {
-                perror("rename() 2");
+                LOG(WARN, "failed to move '%s' to '%s' (%s)", tmpfile, savefile,
+                         strerror(errno));
                 return -1;
             }
         } else {
-            perror("rename()");
+            LOG(WARN, "failed to replace '%s' by '%s' (%s)", savefile,tmpfile,
+                     strerror(errno));
             return -1;
         }
     }
@@ -456,7 +473,7 @@ void usage(const char* name) {
 
 int main(int argc, char** argv) {
     if (setlocale(LC_ALL, "") == NULL) {
-        perror("setlocale()");
+        LOG(WARN, "failed to set locale (%s)", strerror(errno));
     }
 
     // parse arguments
@@ -469,7 +486,7 @@ int main(int argc, char** argv) {
     char* tmpfile;
     int ret = asprintf(&tmpfile, "%s.new", savefile);
     if (ret < 0) {
-        fprintf(stderr, "Could not prepare name for intermediate file\n");
+        LOG(FATAL, "could not prepare name for intermediate file");
         exit(EXIT_FAILURE);
     }
 
@@ -484,7 +501,7 @@ int main(int argc, char** argv) {
     uint64_t i = 0;  // current exponent
     // 2046-bit RSA modulus
     mpz_t n;
-    mpz_init_set_str(n, 
+    mpz_init_set_str(n,
         "631446608307288889379935712613129233236329881833084137558899"
         "077270195712892488554730844605575320651361834662884894808866"
         "350036848039658817136198766052189726781016228055747539383830"
@@ -502,7 +519,7 @@ int main(int argc, char** argv) {
     mpz_init_set_ui(w, 2);
 
     if (resume(savefile, &t, &i, &c, n, w) < 0) {
-        fprintf(stderr, "An error happened while resuming previous session\n");
+        LOG(FATAL, "failed to resume session");
         exit(EXIT_FAILURE);
     }
 
@@ -537,11 +554,11 @@ int main(int argc, char** argv) {
         fprintf(stderr, "\r\33[K");
 
         if (check_consistency(i, c, w) < 0) {
-            fprintf(stderr, "An error happened during computation\n");
+            LOG(FATAL, "an error happened during computation");
             exit(EXIT_FAILURE);
         }
         if (checkpoint(savefile, tmpfile, t, i, c, n, w) < 0) {
-            fprintf(stderr, "Failed to save checkpoint!\n");
+            LOG(FATAL, "failed to save checkpoint!");
             exit(EXIT_FAILURE);
         }
         show_progress(i, t, &prev_i, &prev_time);
@@ -552,7 +569,7 @@ int main(int argc, char** argv) {
     mpz_mod(w, w, n);
     char* str_w = mpz_get_str(NULL, 10, w);
     if (str_w == NULL) {
-        fprintf(stderr, "Failed to convert w to decimal\n");
+        LOG(FATAL, "failed to convert w to decimal");
         exit(EXIT_FAILURE);
     }
     fprintf(stderr, "w = %s\n", str_w);
