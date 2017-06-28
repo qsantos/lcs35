@@ -1,15 +1,21 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wvla -O3
-LDFLAGS = -lgmp
+LDFLAGS = -O3 -lgmp
 TARGETS = lcs35
 
 all: $(TARGETS)
 
-lcs35: lcs35.c
+lcs35: lcs35.o session.o time.o util.o
 	@# MinGW wants source files before linker flags
-	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
+	$(CC) $^ $(LDFLAGS) -o $@
+
+-include $(wildcard *.d)
+%.o: %.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -MM -o $*.d $<
 
 clean:
+	rm -f *.o *.d
 
 run: all
 	./$(TARGETS)
