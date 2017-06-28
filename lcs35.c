@@ -235,13 +235,22 @@ size_t human_time_both(char* s, size_t n, double secs) {
     return n_printed;
 }
 
-int check_consistency(uint64_t i, uint64_t c, mpz_t w) {
+struct session {
+    uint64_t t;  // target exponent
+    uint64_t i;  // current exponent
+    uint64_t c;  // control modulus
+    mpz_t n;  // modulus (product of two primes)
+    mpz_t w;  // computed power of 2
+    mpz_t n_times_c;  // pre-computed value of n*c for convenience
+};
+
+int check_consistency(const struct session* session) {
     /* Consistency check of w using prime factor c of n */
     // because c is prime:
     // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-    uint64_t reduced_e = powm(2, i, c-1);  // 2^i mod phi(c)
-    uint64_t check = powm(2, reduced_e, c);  // 2^(2^i) mod c
-    uint64_t w_mod_c = mpz_fdiv_ui(w, c);  // w mod c = 2^(2^i) mod c
+    uint64_t reduced_e = powm(2, session->i, session->c-1);  // 2^i mod phi(c)
+    uint64_t check = powm(2, reduced_e, session->c);  // 2^(2^i) mod c
+    uint64_t w_mod_c = mpz_fdiv_ui(session->w, session->c);  // w mod c
     if (w_mod_c != check) {
         LOG(WARN, "inconsistency detected (%"PRIu64" != %"PRIu64")", check, w_mod_c);
         return -1;
@@ -249,7 +258,7 @@ int check_consistency(uint64_t i, uint64_t c, mpz_t w) {
     return 0;
 }
 
-int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n, mpz_t w) {
+int resume(const char* savefile, struct session* session) {
     /* Resume progress from savefile
      *
      * returns 1 if session was resumed
@@ -288,7 +297,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     // in order: t, i, c, n, w
 
     // t
-    if (fscanf(f, "%"SCNu64"\n", t) < 0) {
+    if (fscanf(f, "%"SCNu64"\n", &session->t) < 0) {
         if (errno == 0) {
             LOG(WARN, "unexpected end of file while reading t");
         } else {
@@ -298,7 +307,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     }
 
     // i
-    if (fscanf(f, "%"SCNu64"\n", i) < 0) {
+    if (fscanf(f, "%"SCNu64"\n", &session->i) < 0) {
         if (errno == 0) {
             LOG(WARN, "unexpected end of file while reading i");
         } else {
@@ -308,7 +317,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     }
 
     // c
-    if (fscanf(f, "%"SCNu64"\n", c) < 0) {
+    if (fscanf(f, "%"SCNu64"\n", &session->c) < 0) {
         if (errno == 0) {
             LOG(WARN, "unexpected end of file while reading c");
         } else {
@@ -321,14 +330,14 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
 
     // n
     getnline(line, sizeof(line), f);
-    if (mpz_set_str(n, line, 10) < 0) {
+    if (mpz_set_str(session->n, line, 10) < 0) {
         LOG(WARN, "invalid decimal number n = %s", line);
         return -1;
     }
 
     // w
     getnline(line, sizeof(line), f);
-    if (mpz_set_str(w, line, 10) < 0) {
+    if (mpz_set_str(session->w, line, 10) < 0) {
         LOG(WARN, "invalid decimal number w = %s", line);
         return -1;
     }
@@ -339,7 +348,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
     }
 
     // finally, does the data look good?
-    if (check_consistency(*i, *c, w) < 0) {
+    if (check_consistency(session) < 0) {
         LOG(WARN, "data from the '%s' looks incorrect", savefile);
         return -1;
     }
@@ -349,7 +358,7 @@ int resume(const char* savefile, uint64_t* t, uint64_t* i, uint64_t* c, mpz_t n,
 }
 
 int checkpoint(const char* savefile, const char* tmpfile,
-               uint64_t t, uint64_t i, uint64_t c, mpz_t n, mpz_t w) {
+               const struct session* session) {
     /* Save progress into savefile */
 
     // write in temporary file for atomic updates using rename()
@@ -364,25 +373,25 @@ int checkpoint(const char* savefile, const char* tmpfile,
     // in order: t, i, c, n, w
 
     // t
-    if (fprintf(f, "%"PRIu64"\n", t) < 0) {
+    if (fprintf(f, "%"PRIu64"\n", session->t) < 0) {
         LOG(WARN, "could not write t to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // i
-    if (fprintf(f, "%"PRIu64"\n", i) < 0) {
+    if (fprintf(f, "%"PRIu64"\n", session->i) < 0) {
         LOG(WARN, "could not write i to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // c
-    if (fprintf(f, "%"PRIu64"\n", c) < 0) {
+    if (fprintf(f, "%"PRIu64"\n", session->c) < 0) {
         LOG(WARN, "could not write c to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // n
-    char* str_n = mpz_get_str(NULL, 10, n);
+    char* str_n = mpz_get_str(NULL, 10, session->n);
     if (str_n == NULL) {
         LOG(WARN, "failed to convert n to decimal");
         return -1;
@@ -394,7 +403,7 @@ int checkpoint(const char* savefile, const char* tmpfile,
     free(str_n);
 
     // w
-    char* str_w = mpz_get_str(NULL, 10, w);
+    char* str_w = mpz_get_str(NULL, 10, session->w);
     if (str_w == NULL) {
         LOG(WARN, "failed to convert w to decimal");
         return -1;
@@ -496,12 +505,14 @@ int main(int argc, char** argv) {
     printf("%s\n", brand_string);
 
     // initialize to default values
-    uint64_t c = 2446683847;  // 32 bit prime
-    uint64_t t = 79685186856218;  // target exponent
-    uint64_t i = 0;  // current exponent
+    struct session session = {
+        .c = 2446683847,  // 32 bit prime
+        .t = 79685186856218,
+        .i = 0,
+    };
     // 2046-bit RSA modulus
-    mpz_t n;
-    mpz_init_set_str(n,
+    mpz_init(session.n);
+    mpz_init_set_str(session.n,
         "631446608307288889379935712613129233236329881833084137558899"
         "077270195712892488554730844605575320651361834662884894808866"
         "350036848039658817136198766052189726781016228055747539383830"
@@ -514,11 +525,11 @@ int main(int argc, char** argv) {
         "532332018406452247646396635593736700936921275809208629319872"
         "7008292431243681", 10
     );
-    // current value
-    mpz_t w;
-    mpz_init_set_ui(w, 2);
+    // base of computation
+    mpz_init(session.w);
+    mpz_init_set_ui(session.w, 2);
 
-    if (resume(savefile, &t, &i, &c, n, w) < 0) {
+    if (resume(savefile, &session) < 0) {
         LOG(FATAL, "failed to resume session");
         exit(EXIT_FAILURE);
     }
@@ -529,45 +540,44 @@ int main(int argc, char** argv) {
     // thus, we work moudulo n * c rather than n
     // at any point, we can then reduce w mod c and compare it to 2^(2^i) mod c
     // in the end, we can reduce w mod n to retrieve the actual result
-    mpz_t n_times_c;
-    mpz_init(n_times_c);
-    mpz_mul_ui(n_times_c, n, c);
+    mpz_init(session.n_times_c);
+    mpz_mul_ui(session.n_times_c, session.n, session.c);
 
     // initialize timer
-    uint64_t prev_i = i;
+    uint64_t prev_i = session.i;
     double prev_time = real_clock();
-    show_progress(i, t, &prev_i, &prev_time);
+    show_progress(session.i, session.t, &prev_i, &prev_time);
 
-    while (i < t) {
-        uint64_t stepsize = min(t - i, 1ULL<<20);
+    while (session.i < session.t) {
+        uint64_t stepsize = min(session.t - session.i, 1ULL<<20);
 
         // w = w^(2^stepsize) mod (n*c);
         mpz_t tmp;
         mpz_init(tmp);
         mpz_setbit(tmp, stepsize);
-        mpz_powm(w, w, tmp, n_times_c);
+        mpz_powm(session.w, session.w, tmp, session.n_times_c);
         mpz_clear(tmp);
 
-        i += stepsize;
+        session.i += stepsize;
 
         // clear line in case errors are to be printed
         fprintf(stderr, "\r\33[K");
 
-        if (check_consistency(i, c, w) < 0) {
+        if (check_consistency(&session) < 0) {
             LOG(FATAL, "an error happened during computation");
             exit(EXIT_FAILURE);
         }
-        if (checkpoint(savefile, tmpfile, t, i, c, n, w) < 0) {
+        if (checkpoint(savefile, tmpfile, &session) < 0) {
             LOG(FATAL, "failed to save checkpoint!");
             exit(EXIT_FAILURE);
         }
-        show_progress(i, t, &prev_i, &prev_time);
+        show_progress(session.i, session.t, &prev_i, &prev_time);
     }
 
     // one can only dream...
     fprintf(stderr, "\rCalculation complete.\n");
-    mpz_mod(w, w, n);
-    char* str_w = mpz_get_str(NULL, 10, w);
+    mpz_mod(session.w, session.w, session.n);
+    char* str_w = mpz_get_str(NULL, 10, session.w);
     if (str_w == NULL) {
         LOG(FATAL, "failed to convert w to decimal");
         exit(EXIT_FAILURE);
@@ -576,9 +586,9 @@ int main(int argc, char** argv) {
     free(str_w);
 
     // clean up
-    mpz_clear(n_times_c);
-    mpz_clear(w);
-    mpz_clear(n);
+    mpz_clear(session.n_times_c);
+    mpz_clear(session.w);
+    mpz_clear(session.n);
     free(tmpfile);
     return EXIT_SUCCESS;
 }
