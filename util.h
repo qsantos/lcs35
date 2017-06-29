@@ -7,8 +7,6 @@
 // C99
 #include <stdint.h>
 
-#define min(a, b) ((a) < (b) ? (a) : (b))
-
 // fix: MinGW generates erroneous warning (in fpclassify(), isnan(), signbit())
 #ifdef __MINGW32__
 #undef __mingw_choose_expr  // set to __builtin_choose_expr in math.h

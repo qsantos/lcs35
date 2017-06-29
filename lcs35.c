@@ -153,20 +153,8 @@ int main(int argc, char** argv) {
     double prev_time = real_clock();
     show_progress(session->i, session->t, &prev_i, &prev_time);
 
-    while (session->i < session->t) {
-        uint64_t stepsize = min(session->t - session->i, 1ULL<<20);
-
-        // w = w^(2^stepsize) mod (n*c);
-        mpz_t tmp;
-        mpz_init(tmp);
-        mpz_setbit(tmp, stepsize);
-        mpz_powm(session->w, session->w, tmp, session->n_times_c);
-        mpz_clear(tmp);
-
-        session->i += stepsize;
-
-        // clear line in case errors are to be printed
-        fprintf(stderr, "\r\33[K");
+    while (session_work(session, 1ull<<20) != 0) {
+        fprintf(stderr, "\r\33[K");  // clear line for errors messages
         checkpoint(session, savefile, tmpfile);
         show_progress(session->i, session->t, &prev_i, &prev_time);
     }

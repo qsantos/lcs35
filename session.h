@@ -28,4 +28,6 @@ extern int session_save(const struct session* session, const char* filename);
 extern int session_isafter(const struct session* before,
                            const struct session* after);
 
+extern uint64_t session_work(struct session* session, uint64_t amount);
+
 #endif
