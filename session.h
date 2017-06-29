@@ -20,7 +20,6 @@ extern int check_consistency(const struct session* session);
 
 extern int resume(const char* savefile, struct session* session);
 
-extern int checkpoint(const char* savefile, const char* tmpfile,
-                      const struct session* session);
+extern int checkpoint(const char* savefile, const struct session* session);
 
 #endif

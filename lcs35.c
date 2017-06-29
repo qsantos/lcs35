@@ -132,8 +132,12 @@ int main(int argc, char** argv) {
             LOG(FATAL, "an error happened during computation");
             exit(EXIT_FAILURE);
         }
-        if (checkpoint(savefile, tmpfile, &session) < 0) {
-            LOG(FATAL, "failed to save checkpoint!");
+        if (checkpoint(tmpfile, &session) < 0) {
+            LOG(FATAL, "failed to create new checkpoint!");
+            exit(EXIT_FAILURE);
+        }
+        if (compat_rename(tmpfile, savefile) < 0) {
+            LOG(FATAL, "failed to replace old checkpoint!");
             exit(EXIT_FAILURE);
         }
         show_progress(session.i, session.t, &prev_i, &prev_time);

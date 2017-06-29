@@ -184,15 +184,14 @@ extern int resume(const char* savefile, struct session* session) {
     return 1;
 }
 
-extern int checkpoint(const char* savefile, const char* tmpfile,
-                      const struct session* session) {
-    /* Save progress into savefile */
+extern int checkpoint(const char* savefile, const struct session* session) {
+    /* Save progress into file */
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    FILE* f = fopen(tmpfile, "wb");
+    FILE* f = fopen(savefile, "wb");
     if (f == NULL) {
-        LOG(WARN, "could not open '%s' for writing (%s)", tmpfile, strerror(errno));
+        LOG(WARN, "could not open '%s' for writing (%s)", savefile, strerror(errno));
         return -1;
     }
 
@@ -246,35 +245,9 @@ extern int checkpoint(const char* savefile, const char* tmpfile,
     fsync(fileno(f));  // flush kernel buffers and disk cache
 
     if (fclose(f) < 0) {
-        LOG(WARN, "failed to close '%s' (%s)", tmpfile, strerror(errno));
+        LOG(WARN, "failed to close '%s' (%s)", savefile, strerror(errno));
         return -1;
-    }
-
-    // ensure an atomic update using rename() on POSIX systems
-    if (rename(tmpfile, savefile) < 0) {
-        if (errno == EEXIST) {
-            // on non-POSIX systems (i.e. Windows), `rename()` might not accept
-            // to replace existing `oldpath` with `newpath`; we will have to
-            // hope that `remove()` followed by `rename()` is sufficient; if a
-            // crash happen in between, the user will have to rename the file
-            // by themselves
-            if (remove(savefile) < 0) {
-                LOG(WARN, "failed to remove '%s' for replacement (%s)",
-                         savefile, strerror(errno));
-                return -1;
-            }
-            if (rename(tmpfile, savefile) < 0) {
-                LOG(WARN, "failed to move '%s' to '%s' (%s)", tmpfile, savefile,
-                         strerror(errno));
-                return -1;
-            }
-        } else {
-            LOG(WARN, "failed to replace '%s' by '%s' (%s)", savefile,tmpfile,
-                     strerror(errno));
-            return -1;
-        }
     }
 
     return 0;
 }
-
