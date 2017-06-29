@@ -83,11 +83,6 @@ static struct session* resume_or_start(const char* savefile, const char* tmpfile
     return session;
 }
 
-void usage(const char* name) {
-    fprintf(stderr, "Usage: %s savefile\n", name);
-    exit(EXIT_FAILURE);
-}
-
 int main(int argc, char** argv) {
     if (setlocale(LC_ALL, "") == NULL) {
         LOG(WARN, "failed to set locale (%s)", strerror(errno));
