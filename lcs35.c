@@ -82,6 +82,24 @@ static struct session* resume_or_start(const char* savefile, const char* tmpfile
     return session;
 }
 
+static void checkpoint(const struct session* session, const char* savefile,
+                       const char* tmpfile) {
+    if (session_check(session) < 0) {
+        LOG(FATAL, "an error happened during computation");
+        exit(EXIT_FAILURE);
+    }
+
+    if (session_save(session, tmpfile) < 0) {
+        LOG(FATAL, "failed to create new checkpoint!");
+        exit(EXIT_FAILURE);
+    }
+
+    if (compat_rename(tmpfile, savefile) < 0) {
+        LOG(FATAL, "failed to replace old checkpoint!");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main(int argc, char** argv) {
     if (setlocale(LC_ALL, "") == NULL) {
         LOG(WARN, "failed to set locale (%s)", strerror(errno));
@@ -127,19 +145,7 @@ int main(int argc, char** argv) {
 
         // clear line in case errors are to be printed
         fprintf(stderr, "\r\33[K");
-
-        if (session_check(session) < 0) {
-            LOG(FATAL, "an error happened during computation");
-            exit(EXIT_FAILURE);
-        }
-        if (session_save(session, tmpfile) < 0) {
-            LOG(FATAL, "failed to create new checkpoint!");
-            exit(EXIT_FAILURE);
-        }
-        if (compat_rename(tmpfile, savefile) < 0) {
-            LOG(FATAL, "failed to replace old checkpoint!");
-            exit(EXIT_FAILURE);
-        }
+        checkpoint(session, savefile, tmpfile);
         show_progress(session->i, session->t, &prev_i, &prev_time);
     }
 
