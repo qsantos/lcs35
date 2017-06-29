@@ -16,6 +16,9 @@ struct session {
     mpz_t n_times_c;  // pre-computed value of n*c for convenience
 };
 
+extern struct session* session_new(void);
+extern void session_delete(struct session* session);
+
 extern int session_check(const struct session* session);
 extern int session_load(struct session* session, const char* filename);
 extern int session_save(const struct session* session, const char* filename);

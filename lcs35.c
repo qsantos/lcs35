@@ -69,70 +69,38 @@ int main(int argc, char** argv) {
     get_brand_string(brand_string);
     printf("%s\n", brand_string);
 
-    // initialize to default values
-    struct session session = {
-        .c = 2446683847,  // 32 bit prime
-        .t = 79685186856218,
-        .i = 0,
-    };
-    // 2046-bit RSA modulus
-    mpz_init(session.n);
-    mpz_init_set_str(session.n,
-        "631446608307288889379935712613129233236329881833084137558899"
-        "077270195712892488554730844605575320651361834662884894808866"
-        "350036848039658817136198766052189726781016228055747539383830"
-        "826175971321892666861177695452639157012069093997368008972127"
-        "446466642331918780683055206795125307008202024124623398241073"
-        "775370512734449416950118097524189066796385875485631980550727"
-        "370990439711973361466670154390536015254337398252457931357531"
-        "765364633198906465140213398526580034199190398219284471021246"
-        "488745938885358207031808428902320971090703239693491996277899"
-        "532332018406452247646396635593736700936921275809208629319872"
-        "7008292431243681", 10
-    );
-    // base of computation
-    mpz_init(session.w);
-    mpz_init_set_ui(session.w, 2);
-
-    if (session_load(&session, savefile) < 0) {
+    // start or resume session
+    struct session* session = session_new();
+    if (session_load(session, savefile) < 0) {
         LOG(FATAL, "failed to resume session");
         exit(EXIT_FAILURE);
     }
 
-    // We exploit a trick offered by Shamir to detect computation errors
-    // c is a small prime number (e.g. 32 bits)
-    // it is easy to comptue 2^(2^i) mod c using Euler's totient function
-    // thus, we work moudulo n * c rather than n
-    // at any point, we can then reduce w mod c and compare it to 2^(2^i) mod c
-    // in the end, we can reduce w mod n to retrieve the actual result
-    mpz_init(session.n_times_c);
-    mpz_mul_ui(session.n_times_c, session.n, session.c);
-
     // initialize timer
-    uint64_t prev_i = session.i;
+    uint64_t prev_i = session->i;
     double prev_time = real_clock();
-    show_progress(session.i, session.t, &prev_i, &prev_time);
+    show_progress(session->i, session->t, &prev_i, &prev_time);
 
-    while (session.i < session.t) {
-        uint64_t stepsize = min(session.t - session.i, 1ULL<<20);
+    while (session->i < session->t) {
+        uint64_t stepsize = min(session->t - session->i, 1ULL<<20);
 
         // w = w^(2^stepsize) mod (n*c);
         mpz_t tmp;
         mpz_init(tmp);
         mpz_setbit(tmp, stepsize);
-        mpz_powm(session.w, session.w, tmp, session.n_times_c);
+        mpz_powm(session->w, session->w, tmp, session->n_times_c);
         mpz_clear(tmp);
 
-        session.i += stepsize;
+        session->i += stepsize;
 
         // clear line in case errors are to be printed
         fprintf(stderr, "\r\33[K");
 
-        if (session_check(&session) < 0) {
+        if (session_check(session) < 0) {
             LOG(FATAL, "an error happened during computation");
             exit(EXIT_FAILURE);
         }
-        if (session_save(&session, tmpfile) < 0) {
+        if (session_save(session, tmpfile) < 0) {
             LOG(FATAL, "failed to create new checkpoint!");
             exit(EXIT_FAILURE);
         }
@@ -140,13 +108,13 @@ int main(int argc, char** argv) {
             LOG(FATAL, "failed to replace old checkpoint!");
             exit(EXIT_FAILURE);
         }
-        show_progress(session.i, session.t, &prev_i, &prev_time);
+        show_progress(session->i, session->t, &prev_i, &prev_time);
     }
 
     // one can only dream...
     fprintf(stderr, "\rCalculation complete.\n");
-    mpz_mod(session.w, session.w, session.n);
-    char* str_w = mpz_get_str(NULL, 10, session.w);
+    mpz_mod(session->w, session->w, session->n);
+    char* str_w = mpz_get_str(NULL, 10, session->w);
     if (str_w == NULL) {
         LOG(FATAL, "failed to convert w to decimal");
         exit(EXIT_FAILURE);
@@ -155,9 +123,7 @@ int main(int argc, char** argv) {
     free(str_w);
 
     // clean up
-    mpz_clear(session.n_times_c);
-    mpz_clear(session.w);
-    mpz_clear(session.n);
+    session_delete(session);
     free(tmpfile);
     return EXIT_SUCCESS;
 }

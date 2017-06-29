@@ -71,6 +71,55 @@ static size_t getnline(char* s, size_t n, FILE* f) {
     return r;
 }
 
+extern struct session* session_new(void) {
+    // allocate memory
+    struct session* session = malloc(sizeof(*session));
+    if (session == NULL) {
+        return NULL;
+    }
+
+    // initialize to default values
+    session->c = 2446683847;  // 32 bit prime
+    session->t = 79685186856218;
+    session->i = 0;
+    // 2046-bit RSA modulus
+    mpz_init(session->n);
+    mpz_init_set_str(session->n,
+        "631446608307288889379935712613129233236329881833084137558899"
+        "077270195712892488554730844605575320651361834662884894808866"
+        "350036848039658817136198766052189726781016228055747539383830"
+        "826175971321892666861177695452639157012069093997368008972127"
+        "446466642331918780683055206795125307008202024124623398241073"
+        "775370512734449416950118097524189066796385875485631980550727"
+        "370990439711973361466670154390536015254337398252457931357531"
+        "765364633198906465140213398526580034199190398219284471021246"
+        "488745938885358207031808428902320971090703239693491996277899"
+        "532332018406452247646396635593736700936921275809208629319872"
+        "7008292431243681", 10
+    );
+    // base of computation
+    mpz_init(session->w);
+    mpz_init_set_ui(session->w, 2);
+
+    // We exploit a trick offered by Shamir to detect computation errors
+    // c is a small prime number (e.g. 32 bits)
+    // it is easy to comptue 2^(2^i) mod c using Euler's totient function
+    // thus, we work moudulo n * c rather than n
+    // at any point, we can then reduce w mod c and compare it to 2^(2^i) mod c
+    // in the end, we can reduce w mod n to retrieve the actual result
+    mpz_init(session->n_times_c);
+    mpz_mul_ui(session->n_times_c, session->n, session->c);
+
+    return session;
+}
+
+extern void session_delete(struct session* session) {
+    mpz_clear(session->n_times_c);
+    mpz_clear(session->w);
+    mpz_clear(session->n);
+    free(session);
+}
+
 extern int session_check(const struct session* session) {
     /* Consistency check of w using prime factor c of n */
     // because c is prime:
@@ -179,6 +228,9 @@ extern int session_load(struct session* session, const char* filename) {
         LOG(WARN, "data from '%s' looks incorrect", filename);
         return -1;
     }
+
+    // update n times c
+    mpz_mul_ui(session->n_times_c, session->n, session->c);
 
     // successfully resumed
     return 1;
