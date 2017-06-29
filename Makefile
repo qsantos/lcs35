@@ -17,6 +17,9 @@ lcs35: lcs35.o session.o time.o util.o
 clean:
 	rm -f *.o *.d
 
+check:
+	clang-tidy *.h *.c
+
 run: all
 	./$(TARGETS)
 
