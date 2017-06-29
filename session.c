@@ -71,7 +71,7 @@ static size_t getnline(char* s, size_t n, FILE* f) {
     return r;
 }
 
-extern int check_consistency(const struct session* session) {
+extern int session_check(const struct session* session) {
     /* Consistency check of w using prime factor c of n */
     // because c is prime:
     // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
@@ -85,22 +85,22 @@ extern int check_consistency(const struct session* session) {
     return 0;
 }
 
-extern int resume(const char* savefile, struct session* session) {
-    /* Resume progress from savefile
+extern int session_load(struct session* session, const char* filename) {
+    /* Resume progress from file
      *
      * returns 1 if session was resumed
      * returns 0 if no session was found
      * returns -1 if an error was encountered */
 
     // first, does the file exists?
-    FILE* f = fopen(savefile, "r");
+    FILE* f = fopen(filename, "r");
     if (f == NULL) {
         if (errno != ENOENT) {
-            // savefile may exist but another error stops us from reading it
-            LOG(WARN, "could not open '%s' for reading (%s)", savefile, strerror(errno));
+            // file may exist but another error stops us from reading it
+            LOG(WARN, "could not open '%s' for reading (%s)", filename, strerror(errno));
             return -1;
         }
-        // savefile does not exist, nothing to resume
+        // file does not exist, nothing to resume
         return 0;
     }
 
@@ -109,15 +109,15 @@ extern int resume(const char* savefile, struct session* session) {
     struct stat fileinfo;
     int ret = fstat(fileno(f), &fileinfo);
     if (ret < 0) {
-        LOG(WARN, "could not stat '%s' (%s)", savefile, strerror(errno));
+        LOG(WARN, "could not stat '%s' (%s)", filename, strerror(errno));
         return -1;
     }
     if (!S_ISREG(fileinfo.st_mode)) {
-        LOG(WARN, "'%s' is not a regular file", savefile);
+        LOG(WARN, "'%s' is not a regular file", filename);
         return -1;
     }
 
-    // savefile exist and is a regular file; we may use it to resume the
+    // file exist and is a regular file; we may use it to resume the
     // previous session and to save checkpoints
 
     // each line contains one paramater in ASCII decimal representation
@@ -170,13 +170,13 @@ extern int resume(const char* savefile, struct session* session) {
     }
 
     if (fclose(f) < 0) {
-        LOG(WARN, "failed to close '%s' (%s)", savefile, strerror(errno));
+        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
     }
 
     // finally, does the data look good?
-    if (check_consistency(session) < 0) {
-        LOG(WARN, "data from the '%s' looks incorrect", savefile);
+    if (session_check(session) < 0) {
+        LOG(WARN, "data from '%s' looks incorrect", filename);
         return -1;
     }
 
@@ -184,14 +184,14 @@ extern int resume(const char* savefile, struct session* session) {
     return 1;
 }
 
-extern int checkpoint(const char* savefile, const struct session* session) {
+extern int session_save(const struct session* session, const char* filename) {
     /* Save progress into file */
 
     // write in temporary file for atomic updates using rename()
     // this require both files to be on the same filesystem
-    FILE* f = fopen(savefile, "wb");
+    FILE* f = fopen(filename, "wb");
     if (f == NULL) {
-        LOG(WARN, "could not open '%s' for writing (%s)", savefile, strerror(errno));
+        LOG(WARN, "could not open '%s' for writing (%s)", filename, strerror(errno));
         return -1;
     }
 
@@ -245,7 +245,7 @@ extern int checkpoint(const char* savefile, const struct session* session) {
     fsync(fileno(f));  // flush kernel buffers and disk cache
 
     if (fclose(f) < 0) {
-        LOG(WARN, "failed to close '%s' (%s)", savefile, strerror(errno));
+        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
     }
 

@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
     mpz_init(session.w);
     mpz_init_set_ui(session.w, 2);
 
-    if (resume(savefile, &session) < 0) {
+    if (session_load(&session, savefile) < 0) {
         LOG(FATAL, "failed to resume session");
         exit(EXIT_FAILURE);
     }
@@ -128,11 +128,11 @@ int main(int argc, char** argv) {
         // clear line in case errors are to be printed
         fprintf(stderr, "\r\33[K");
 
-        if (check_consistency(&session) < 0) {
+        if (session_check(&session) < 0) {
             LOG(FATAL, "an error happened during computation");
             exit(EXIT_FAILURE);
         }
-        if (checkpoint(tmpfile, &session) < 0) {
+        if (session_save(&session, tmpfile) < 0) {
             LOG(FATAL, "failed to create new checkpoint!");
             exit(EXIT_FAILURE);
         }

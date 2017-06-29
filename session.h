@@ -16,10 +16,8 @@ struct session {
     mpz_t n_times_c;  // pre-computed value of n*c for convenience
 };
 
-extern int check_consistency(const struct session* session);
-
-extern int resume(const char* savefile, struct session* session);
-
-extern int checkpoint(const char* savefile, const struct session* session);
+extern int session_check(const struct session* session);
+extern int session_load(struct session* session, const char* filename);
+extern int session_save(const struct session* session, const char* filename);
 
 #endif
