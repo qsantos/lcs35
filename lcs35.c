@@ -16,9 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) {
-    /* Show progress */
-
+static void show_progress(uint64_t i, uint64_t t,
+                          uint64_t* prev_i, double* prev_time) {
     // compute remaining time in seconds
     double now = real_clock();
     double units_per_second = (double) (i - *prev_i) / (now - *prev_time);
