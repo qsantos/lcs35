@@ -40,6 +40,49 @@ void show_progress(uint64_t i, uint64_t t, uint64_t* prev_i, double* prev_time) 
     *prev_time = now;
 }
 
+static struct session* resume_or_start(const char* savefile, const char* tmpfile) {
+    struct session* session = session_new();
+
+    // trying to resume from normal session file
+    int ret = session_load(session, savefile);
+    if (ret == 0) {
+        // continue
+    } else if (ret == 1) {
+        LOG(DEBUG, "normal session file valid; resuming from it");
+        // for the sake of simplicity we ignore any existing intermediate file
+        return session;
+    } else {
+        // this should really not happen!
+        LOG(FATAL, "normal session file invalid");
+        exit(EXIT_FAILURE);
+    }
+    LOG(DEBUG, "normal session file not found");
+
+    // trying to resume from intermediate session file
+    ret = session_load(session, tmpfile);
+    if (ret == 0) {
+        LOG(DEBUG, "intermediate session file not found; starting from zero");
+        return session;
+    } else if (ret == 1) {
+        // continue
+    } else {
+        // this should really not happen either!
+        LOG(FATAL, "intermediate session file invalid; please fix");
+        exit(EXIT_FAILURE);
+    }
+    LOG(DEBUG, "intermediate session file valid; resuming from it");
+
+    LOG(INFO, "trying to restore normal session file from intermediate file");
+    if (rename(tmpfile, savefile) < 0) {
+        LOG(FATAL, "failed to rename intermediate file '%s' to '%s' (%s)",
+            tmpfile, savefile, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    LOG(DEBUG, "session resumed from intermediate file");
+    return session;
+}
+
 void usage(const char* name) {
     fprintf(stderr, "Usage: %s savefile\n", name);
     exit(EXIT_FAILURE);
@@ -69,12 +112,7 @@ int main(int argc, char** argv) {
     get_brand_string(brand_string);
     printf("%s\n", brand_string);
 
-    // start or resume session
-    struct session* session = session_new();
-    if (session_load(session, savefile) < 0) {
-        LOG(FATAL, "failed to resume session");
-        exit(EXIT_FAILURE);
-    }
+    struct session* session = resume_or_start(savefile, tmpfile);
 
     // initialize timer
     uint64_t prev_i = session->i;
