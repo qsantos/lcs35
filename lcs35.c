@@ -84,18 +84,40 @@ static struct session* resume_or_start(const char* savefile, const char* tmpfile
 
 static void checkpoint(const struct session* session, const char* savefile,
                        const char* tmpfile) {
+    // we keep this check only to distinguish source of error in messages
     if (session_check(session) < 0) {
         LOG(FATAL, "an error happened during computation");
         exit(EXIT_FAILURE);
     }
 
     if (session_save(session, tmpfile) < 0) {
-        LOG(FATAL, "failed to create new checkpoint!");
+        LOG(FATAL, "failed to create intermediate session file!");
         exit(EXIT_FAILURE);
     }
 
+    // to smooth my paranoia, we actually check the consistency of the
+    // intermediate file to avoid corruption from a single soft error (e.g.
+    // cosmic rays) during saving; however, two errors might not be recoverable
+    struct session* tmp = session_new();
+    if (session_load(tmp, tmpfile) < 0) {  // includes consistency check
+        LOG(FATAL, "it seems a soft error interfered");
+        // if it were actually a soft error, we could probably just roll back
+        // and resume, but it's probably better to terminate
+        exit(EXIT_FAILURE);
+    }
+    // not that a corrupted value of n does not lead to an inconsistency; we
+    // may want to add a fail-safe against soft errors in main memory; for now
+    // we just check that the session file is as expected
+    if (!session_isafter(session, tmp)) {
+        // if it were actually a soft error, we could probably just roll back
+        // and resume, but it's probably better to terminate
+        LOG(FATAL, "it seems a subtle soft error interfered");
+        exit(EXIT_FAILURE);
+    }
+    session_delete(tmp);
+
     if (compat_rename(tmpfile, savefile) < 0) {
-        LOG(FATAL, "failed to replace old checkpoint!");
+        LOG(FATAL, "failed to replace normal session file!");
         exit(EXIT_FAILURE);
     }
 }

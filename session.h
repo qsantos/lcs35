@@ -23,4 +23,9 @@ extern int session_check(const struct session* session);
 extern int session_load(struct session* session, const char* filename);
 extern int session_save(const struct session* session, const char* filename);
 
+/* test whether the sessions have the same base parameters are that the current
+ * exponent on `after` is greater than that of `before` */
+extern int session_isafter(const struct session* before,
+                           const struct session* after);
+
 #endif

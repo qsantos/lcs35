@@ -303,3 +303,20 @@ extern int session_save(const struct session* session, const char* filename) {
 
     return 0;
 }
+
+extern int session_isafter(const struct session* before,
+                           const struct session* after) {
+    if (before->c != after->c) {
+        return 0;
+    }
+
+    if (mpz_cmp(before->n, after->n) != 0) {
+        return 0;
+    }
+
+    if (mpz_cmp(before->w, after->w) != 0) {
+        return 0;
+    }
+
+    return before->i <= after->i;
+}
