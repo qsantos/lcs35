@@ -32,14 +32,16 @@ static void show_progress(uint64_t i, uint64_t t,
     }
 
     double progress = 100. * (double) i / (double) t;  // progress percentage
-    fprintf(stderr, "%9.6f%% (%#.12"PRIx64" / %#.12"PRIx64") ETA: %s", progress, i, t, human_time);
+    fprintf(stderr, "%9.6f%% (%#.12" PRIx64 " / %#.12" PRIx64 ") ETA: %s",
+            progress, i, t, human_time);
 
     // update timer
     *prev_i = i;
     *prev_time = now;
 }
 
-static struct session* resume_or_start(const char* savefile, const char* tmpfile) {
+static struct session* resume_or_start(const char* savefile,
+                                       const char* tmpfile) {
     struct session* session = session_new();
 
     // trying to resume from normal session file

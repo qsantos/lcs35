@@ -128,7 +128,8 @@ extern int session_check(const struct session* session) {
     uint64_t check = powm(2, reduced_e, session->c);  // 2^(2^i) mod c
     uint64_t w_mod_c = mpz_fdiv_ui(session->w, session->c);  // w mod c
     if (w_mod_c != check) {
-        LOG(WARN, "inconsistency detected (%"PRIu64" != %"PRIu64")", check, w_mod_c);
+        LOG(WARN, "inconsistency detected (%" PRIu64 " != %" PRIu64 ")", check,
+            w_mod_c);
         return -1;
     }
     return 0;
@@ -146,7 +147,8 @@ extern int session_load(struct session* session, const char* filename) {
     if (f == NULL) {
         if (errno != ENOENT) {
             // file may exist but another error stops us from reading it
-            LOG(WARN, "could not open '%s' for reading (%s)", filename, strerror(errno));
+            LOG(WARN, "could not open '%s' for reading (%s)", filename,
+                strerror(errno));
             return -1;
         }
         // file does not exist, nothing to resume
@@ -243,7 +245,8 @@ extern int session_save(const struct session* session, const char* filename) {
     // this require both files to be on the same filesystem
     FILE* f = fopen(filename, "wb");
     if (f == NULL) {
-        LOG(WARN, "could not open '%s' for writing (%s)", filename, strerror(errno));
+        LOG(WARN, "could not open '%s' for writing (%s)", filename,
+            strerror(errno));
         return -1;
     }
 
@@ -251,19 +254,19 @@ extern int session_save(const struct session* session, const char* filename) {
     // in order: t, i, c, n, w
 
     // t
-    if (fprintf(f, "%"PRIu64"\n", session->t) < 0) {
+    if (fprintf(f, "%" PRIu64 "\n", session->t) < 0) {
         LOG(WARN, "could not write t to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // i
-    if (fprintf(f, "%"PRIu64"\n", session->i) < 0) {
+    if (fprintf(f, "%" PRIu64 "\n", session->i) < 0) {
         LOG(WARN, "could not write i to temporary file (%s)", strerror(errno));
         return -1;
     }
 
     // c
-    if (fprintf(f, "%"PRIu64"\n", session->c) < 0) {
+    if (fprintf(f, "%" PRIu64 "\n", session->c) < 0) {
         LOG(WARN, "could not write c to temporary file (%s)", strerror(errno));
         return -1;
     }

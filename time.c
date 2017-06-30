@@ -55,7 +55,8 @@ extern int human_time_relative(char* s, size_t n, double secs) {
     int years = days / 365;
     days %= 365;
     if (years < 1) {
-        return snprintf(s, n, "%i days %02i:%02i:%02i", days, hours, minutes, seconds);
+        return snprintf(s, n, "%i days %02i:%02i:%02i", days, hours, minutes,
+                        seconds);
     }
     if (years < 2) {
         return snprintf(s, n, "1 year %i days", days);
@@ -85,9 +86,9 @@ extern int human_time_absolute(char* s, size_t n, double secs) {
 
 extern size_t human_time_both(char* s, size_t n, double secs) {
     size_t n_printed = 0;
-    n_printed += (size_t) human_time_relative(s + n_printed, n - n_printed, secs);
+    n_printed += (size_t) human_time_relative(s+n_printed, n-n_printed, secs);
     n_printed += (size_t) snprintf(s + n_printed, n - n_printed, " (");
-    n_printed += (size_t) human_time_absolute(s + n_printed, n - n_printed, secs);
+    n_printed += (size_t) human_time_absolute(s+n_printed, n-n_printed, secs);
     n_printed += (size_t) snprintf(s + n_printed, n - n_printed, ")");
     return n_printed;
 }
