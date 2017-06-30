@@ -157,7 +157,7 @@ extern int session_load(struct session* session, const char* filename) {
     // this is required so that rename() can work properly
     struct stat fileinfo;
     int ret = fstat(fileno(f), &fileinfo);
-    if (ret < 0) {
+    if (ret != 0) {
         LOG(WARN, "could not stat '%s' (%s)", filename, strerror(errno));
         return -1;
     }
@@ -218,13 +218,13 @@ extern int session_load(struct session* session, const char* filename) {
         return -1;
     }
 
-    if (fclose(f) < 0) {
+    if (fclose(f) != 0) {
         LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
     }
 
     // finally, does the data look good?
-    if (session_check(session) < 0) {
+    if (session_check(session) != 0) {
         LOG(WARN, "data from '%s' looks incorrect", filename);
         return -1;
     }
@@ -296,7 +296,7 @@ extern int session_save(const struct session* session, const char* filename) {
     fflush(f);  // flush user-space buffers
     fsync(fileno(f));  // flush kernel buffers and disk cache
 
-    if (fclose(f) < 0) {
+    if (fclose(f) != 0) {
         LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
     }

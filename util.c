@@ -81,13 +81,13 @@ extern int compat_rename(const char* srcfile, const char* dstfile) {
     // crash happen in between, the user will have to rename the file
     // by themselves
 
-    if (remove(dstfile) < 0) {
+    if (remove(dstfile) != 0) {
         LOG(WARN, "failed to remove '%s' for replacement (%s)",
                  dstfile, strerror(errno));
         return -1;
     }
 
-    if (rename(srcfile, dstfile) < 0) {
+    if (rename(srcfile, dstfile) != 0) {
         LOG(WARN, "failed to move '%s' to '%s' (%s)", srcfile, dstfile,
                  strerror(errno));
         return -1;

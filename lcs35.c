@@ -72,7 +72,7 @@ static struct session* resume_or_start(const char* savefile, const char* tmpfile
     LOG(DEBUG, "intermediate session file valid; resuming from it");
 
     LOG(INFO, "trying to restore normal session file from intermediate file");
-    if (rename(tmpfile, savefile) < 0) {
+    if (rename(tmpfile, savefile) != 0) {
         LOG(FATAL, "failed to rename intermediate file '%s' to '%s' (%s)",
             tmpfile, savefile, strerror(errno));
         exit(EXIT_FAILURE);
@@ -85,12 +85,12 @@ static struct session* resume_or_start(const char* savefile, const char* tmpfile
 static void checkpoint(const struct session* session, const char* savefile,
                        const char* tmpfile) {
     // we keep this check only to distinguish source of error in messages
-    if (session_check(session) < 0) {
+    if (session_check(session) != 0) {
         LOG(FATAL, "an error happened during computation");
         exit(EXIT_FAILURE);
     }
 
-    if (session_save(session, tmpfile) < 0) {
+    if (session_save(session, tmpfile) != 0) {
         LOG(FATAL, "failed to create intermediate session file!");
         exit(EXIT_FAILURE);
     }
@@ -99,7 +99,7 @@ static void checkpoint(const struct session* session, const char* savefile,
     // intermediate file to avoid corruption from a single soft error (e.g.
     // cosmic rays) during saving; however, two errors might not be recoverable
     struct session* tmp = session_new();
-    if (session_load(tmp, tmpfile) < 0) {  // includes consistency check
+    if (session_load(tmp, tmpfile) != 1) {  // includes consistency check
         LOG(FATAL, "it seems a soft error interfered");
         // if it were actually a soft error, we could probably just roll back
         // and resume, but it's probably better to terminate
@@ -116,7 +116,7 @@ static void checkpoint(const struct session* session, const char* savefile,
     }
     session_delete(tmp);
 
-    if (compat_rename(tmpfile, savefile) < 0) {
+    if (compat_rename(tmpfile, savefile) != 0) {
         LOG(FATAL, "failed to replace normal session file!");
         exit(EXIT_FAILURE);
     }
