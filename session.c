@@ -42,6 +42,9 @@ static int fsync(int fd) {
 
 static uint64_t powm(uint64_t b, uint64_t e, uint64_t m) {
     /* Compute b^e mod m */
+    /* TODO: intermediate 128 bit result */
+    /* __SIZEOF_INT128__ */
+    /* https://stackoverflow.com/a/26854955/4457767 */
     uint64_t r = 1;
     while (e) {
         if (e & 1) {
@@ -110,7 +113,28 @@ extern struct session* session_new(void) {
     mpz_init(session->n_times_c);
     mpz_mul_ui(session->n_times_c, session->n, session->c);
 
+    session->n_validations = 0;
     return session;
+}
+
+extern struct session* session_copy(const struct session* session) {
+    // allocate memory
+    struct session* ret = malloc(sizeof(*session));
+    if (ret == NULL) {
+        return NULL;
+    }
+
+    // copy information
+    ret->t = session->t;
+    ret->i = session->i;
+    ret->c = session->c;
+    mpz_init_set(ret->n, session->n);
+    mpz_init_set(ret->w, session->w);
+    mpz_init_set(ret->n_times_c, session->n_times_c);
+    ret->n_validations = session->n_validations;
+    ret->metadata = session->metadata;
+
+    return ret;
 }
 
 extern void session_delete(struct session* session) {
@@ -220,6 +244,17 @@ extern int session_load(struct session* session, const char* filename) {
         return -1;
     }
 
+    // n_validations
+    if (fscanf(f, "%d\n", &session->n_validations) < 0) {
+        if (errno == 0) {
+            // backwards-compatibility for session files without n_validations
+            session->n_validations = 0;
+        } else {
+            LOG(WARN, "failed to scan n_validations (%s)", strerror(errno));
+            return -1;
+        }
+    }
+
     if (fclose(f) != 0) {
         LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
@@ -295,6 +330,13 @@ extern int session_save(const struct session* session, const char* filename) {
     }
     free(str_w);
 
+    // n_validations
+    if (fprintf(f, "%d\n", session->n_validations) < 0) {
+        LOG(WARN, "could not write n_validations to temporary file (%s)",
+            strerror(errno));
+        return -1;
+    }
+
     // actually write to disk before replacing previous files
     fflush(f);  // flush user-space buffers
     fsync(fileno(f));  // flush kernel buffers and disk cache
@@ -307,21 +349,22 @@ extern int session_save(const struct session* session, const char* filename) {
     return 0;
 }
 
+extern int session_iscompat(const struct session* session1,
+                            const struct session* session2) {
+    if (session1->c != session2->c) {
+        return 0;
+    }
+
+    if (mpz_cmp(session1->n, session2->n) != 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
 extern int session_isafter(const struct session* before,
                            const struct session* after) {
-    if (before->c != after->c) {
-        return 0;
-    }
-
-    if (mpz_cmp(before->n, after->n) != 0) {
-        return 0;
-    }
-
-    if (mpz_cmp(before->w, after->w) != 0) {
-        return 0;
-    }
-
-    return before->i <= after->i;
+    return session_iscompat(before, after) && before->i <= after->i;
 }
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
