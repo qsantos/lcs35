@@ -16,7 +16,7 @@ validate: validate.o session.o util.o
 -include $(wildcard *.d)
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
-	$(CC) $(CFLAGS) $(CPPFLAGS) -MM -o $*.d $<
+	@$(CC) $(CFLAGS) $(CPPFLAGS) -MM -MP -o $*.d $<
 
 clean:
 	rm -f *.o *.d
