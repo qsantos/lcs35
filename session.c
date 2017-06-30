@@ -370,12 +370,18 @@ extern int session_isafter(const struct session* before,
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 extern uint64_t session_work(struct session* session, uint64_t amount) {
+    if (amount > ULONG_MAX) {
+        LOG(FATAL, "unsupported increment %" PRIu64 " (max: %lu)", amount,
+            ULONG_MAX);
+        exit(EXIT_FAILURE);
+    }
+
     amount = MIN(amount, session->t - session->i);
 
     // w = w^(2^amount) mod (n*c);
     mpz_t tmp;
     mpz_init(tmp);
-    mpz_setbit(tmp, amount);
+    mpz_setbit(tmp, (unsigned long int) amount);
     mpz_powm(session->w, session->w, tmp, session->n_times_c);
     mpz_clear(tmp);
 
