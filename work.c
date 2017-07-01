@@ -124,7 +124,7 @@ static void checkpoint(const struct session* session, const char* savefile,
     }
 }
 
-int main(int argc, char** argv) {
+extern int main(int argc, char** argv) {
     if (setlocale(LC_ALL, "") == NULL) {
         LOG(WARN, "failed to set locale (%s)", strerror(errno));
     }
