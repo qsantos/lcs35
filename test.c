@@ -98,7 +98,10 @@ static void test_time(void) {
 #undef HTIME
 }
 
-extern int main(void) {
+extern int main(int argc, char** argv) {
+    // parse arguments
+    parse_debug_args(&argc, argv);
+
     test_session();
     printf("Automatic tests passed\n");
     test_time();

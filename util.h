@@ -14,6 +14,7 @@
 #endif
 
 enum log_level {
+    NONE,
     FATAL,
     ERR,
     WARN,
@@ -31,6 +32,7 @@ extern int debug_level;
         } \
     } while (0)
 
+extern int parse_debug_args(int* argc, char** argv);
 
 #ifndef _GNU_SOURCE
 extern int asprintf(char** strp, const char* fmt, ...);

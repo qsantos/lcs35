@@ -130,6 +130,7 @@ extern int main(int argc, char** argv) {
     }
 
     // parse arguments
+    parse_debug_args(&argc, argv);
     const char* savefile = "savefile";
     if (argc == 2) {
         savefile = argv[1];

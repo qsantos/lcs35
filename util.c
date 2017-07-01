@@ -11,7 +11,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-int debug_level = INFO;
+int debug_level = FATAL;
+
+extern int parse_debug_args(int* argc, char** argv) {
+    int final_position_of_current_argument = 1;
+    for (int i = 1; i < *argc; i += 1) {
+        if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0) {
+            debug_level = NONE;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
+            debug_level = ERR;
+        } else if (strcmp(argv[i], "-vv") == 0) {
+            debug_level = WARN;
+        } else if (strcmp(argv[i], "-vvv") == 0) {
+            debug_level = INFO;
+        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+            debug_level = DEBUG;
+        } else {
+            argv[final_position_of_current_argument] = argv[i];
+            final_position_of_current_argument += 1;
+        }
+    }
+    argv[final_position_of_current_argument] = NULL;
+    *argc = final_position_of_current_argument;
+    return *argc;
+}
 
 #ifndef _GNU_SOURCE
 extern int asprintf(char** strp, const char* fmt, ...) {

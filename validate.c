@@ -89,6 +89,9 @@ static void* worker(void* argument) {
 }
 
 extern int main(int argc, char** argv) {
+    // pre-parse arguments
+    parse_debug_args(&argc, argv);
+
     // allocate array of session pointers
     size_t n_sessions = (size_t) argc;  // number of arguments + 1 from scratch
     struct session** sessions = malloc(sizeof(struct session*) * n_sessions);
