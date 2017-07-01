@@ -40,22 +40,6 @@ static int fsync(int fd) {
 }
 #endif
 
-static uint64_t powm(uint64_t b, uint64_t e, uint64_t m) {
-    /* Compute b^e mod m */
-    /* TODO: intermediate 128 bit result */
-    /* __SIZEOF_INT128__ */
-    /* https://stackoverflow.com/a/26854955/4457767 */
-    uint64_t r = 1;
-    while (e) {
-        if (e & 1) {
-            r = (r*b) % m;
-        }
-        b = (b*b) % m;
-        e >>= 1;
-    }
-    return r;
-}
-
 static size_t getnline(char* s, size_t n, FILE* f) {
     /* Read until end of line or n-1 next characters */
     size_t r = 0;
@@ -82,7 +66,7 @@ extern struct session* session_new(void) {
     }
 
     // initialize to default values
-    session->c = 2446683847;  // 32 bit prime
+    mpz_init_set_str(session->c, "2446683847", 10);  // 32 bit prime
     session->t = 79685186856218;
     session->i = 0;
     // 2046-bit RSA modulus
@@ -111,7 +95,7 @@ extern struct session* session_new(void) {
     // at any point, we can then reduce w mod c and compare it to 2^(2^i) mod c
     // in the end, we can reduce w mod n to retrieve the actual result
     mpz_init(session->n_times_c);
-    mpz_mul_ui(session->n_times_c, session->n, session->c);
+    mpz_mul(session->n_times_c, session->n, session->c);
 
     session->n_validations = 0;
     return session;
@@ -127,7 +111,7 @@ extern struct session* session_copy(const struct session* session) {
     // copy information
     ret->t = session->t;
     ret->i = session->i;
-    ret->c = session->c;
+    mpz_init_set(ret->c, session->c);
     mpz_init_set(ret->n, session->n);
     mpz_init_set(ret->w, session->w);
     mpz_init_set(ret->n_times_c, session->n_times_c);
@@ -144,16 +128,75 @@ extern void session_delete(struct session* session) {
     free(session);
 }
 
+static void mpz_powm_u64(mpz_t rop, const mpz_t base, uint64_t exp,
+                         const mpz_t mod) {
+    /* Same as mpz_powm_ui except that exp is of type uint64_t */
+
+    // GMP excepts unsigned long, which might be as small as 32 bits; we pass
+    // exp it directly if possible; otherwise, we decompose it in two unsigned
+    // long
+#if ULONG_MAX >= 18446744073709551615u  // can we pass exp directly to GMP?
+    mpz_powm_ui(rop, base, (unsigned long) exp, mod);
+#else
+    // exp = high32 * 2**32 + low32
+    // note that unsigned long might still be more than 32 bits
+    unsigned long low32 = (unsigned long) (exp & 0xffffffff);
+    unsigned long high32 = (unsigned long) (exp >> 32);
+
+    // rop = base**exp
+    //     = base**(high32 * 2**32 + low32)
+    //     = ((base**high32)**(2**16))**(2**16) * base**low32
+    // (modulo mod)
+
+    // rop might alias base or mod so we do not touch it except at the end
+    mpz_t tmp1, tmp2;
+    mpz_init(tmp1);
+    mpz_init(tmp2);
+
+    // tmp1 = ((base**high32)**(2**16))**(2**16)
+    mpz_powm_ui(tmp1, base, high32, mod);
+    mpz_powm_ui(tmp1, tmp1, 1ul<<16, mod);
+    mpz_powm_ui(tmp1, tmp1, 1ul<<16, mod);
+
+    // tmp2 = base**low32
+    mpz_powm_ui(tmp2, base, low32, mod);
+
+    // rop = tmp1 * tmp2
+    mpz_mul(tmp1, tmp1, tmp2);
+    mpz_mod(rop, tmp1, mod);
+
+    mpz_clear(tmp2);
+    mpz_clear(tmp1);
+#endif
+}
+
 extern int session_check(const struct session* session) {
     /* Consistency check of w using prime factor c of n */
     // because c is prime:
     // 2^(2^i) mod c = 2^(2^i mod phi(c)) = 2^(2^i mod (c-1))
-    uint64_t reduced_e = powm(2, session->i, session->c-1);  // 2^i mod phi(c)
-    uint64_t check = powm(2, reduced_e, session->c);  // 2^(2^i) mod c
-    uint64_t w_mod_c = mpz_fdiv_ui(session->w, session->c);  // w mod c
-    if (w_mod_c != check) {
-        LOG(WARN, "inconsistency detected (%" PRIu64 " != %" PRIu64 ")", check,
-            w_mod_c);
+
+    mpz_t two;
+    mpz_init_set_ui(two, 2);
+
+    // quick way: use the fact that c is prime to compute 2^(2^i) mod c
+    mpz_t quick_way;
+    mpz_init(quick_way);
+    mpz_sub_ui(quick_way, session->c, 1);  // phi(c) = c-1 because c is prime
+    mpz_powm_u64(quick_way, two, session->i, quick_way);  // 2^i mod phi(c)
+    mpz_powm(quick_way, two, quick_way, session->c);  // 2^(2^i) mod c
+
+    // slow way: use the fact that (w mod (n*c)) mod c = w mod c
+    mpz_t slow_way;
+    mpz_init(slow_way);
+    mpz_fdiv_r(slow_way, session->w, session->c);  // w mod c
+
+    int cmp = mpz_cmp(quick_way, slow_way);
+    mpz_clear(slow_way);
+    mpz_clear(quick_way);
+    mpz_clear(two);
+
+    if (cmp != 0) {
+        LOG(WARN, "inconsistency detected");
         return -1;
     }
     return 0;
@@ -218,17 +261,14 @@ extern int session_load(struct session* session, const char* filename) {
         return -1;
     }
 
+    char line[1024];
+
     // c
-    if (fscanf(f, "%"SCNu64"\n", &session->c) < 0) {
-        if (errno == 0) {
-            LOG(WARN, "unexpected end of file while reading c");
-        } else {
-            LOG(WARN, "failed to scan c (%s)", strerror(errno));
-        }
+    getnline(line, sizeof(line), f);
+    if (mpz_set_str(session->c, line, 10) < 0) {
+        LOG(WARN, "invalid decimal number c = %s", line);
         return -1;
     }
-
-    char line[1024];
 
     // n
     getnline(line, sizeof(line), f);
@@ -267,7 +307,7 @@ extern int session_load(struct session* session, const char* filename) {
     }
 
     // update n times c
-    mpz_mul_ui(session->n_times_c, session->n, session->c);
+    mpz_mul(session->n_times_c, session->n, session->c);
 
     // successfully resumed
     return 1;
@@ -301,10 +341,16 @@ extern int session_save(const struct session* session, const char* filename) {
     }
 
     // c
-    if (fprintf(f, "%" PRIu64 "\n", session->c) < 0) {
-        LOG(WARN, "could not write c to temporary file (%s)", strerror(errno));
+    char* str_c = mpz_get_str(NULL, 10, session->c);
+    if (str_c == NULL) {
+        LOG(WARN, "failed to convert c to decimal");
         return -1;
     }
+    if (fprintf(f, "%s\n", str_c) < 0) {
+        LOG(WARN, "failed to write c to temporary file (%s)", strerror(errno));
+        return -1;
+    }
+    free(str_c);
 
     // n
     char* str_n = mpz_get_str(NULL, 10, session->n);
@@ -351,7 +397,7 @@ extern int session_save(const struct session* session, const char* filename) {
 
 extern int session_iscompat(const struct session* session1,
                             const struct session* session2) {
-    if (session1->c != session2->c) {
+    if (mpz_cmp(session1->c, session2->c) != 0) {
         return 0;
     }
 
