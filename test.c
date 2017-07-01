@@ -2,6 +2,7 @@
 
 #include "session.h"
 #include "time.h"
+#include "util.h"
 
 // C90
 #include <errno.h>
@@ -42,16 +43,14 @@ static void test_session(void) {
     // session_save(), session_load()
     char filename[] = "/tmp/savefile.XXXXXX";
     if (mkstemp(filename) < 0) {
-        fprintf(stderr, "Failed to create temporary file (%s)\n",
-                strerror(errno));
+        LOG(FATAL, "Failed to create temporary file (%s)\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
     session_save(session, filename);
     struct session* restored = session_new();
     ASSERT(session_load(restored, filename) == 1);
     if (remove(filename) != 0) {
-        fprintf(stderr, "Failed to remove temporary file (%s)\n",
-                strerror(errno));
+        LOG(ERR, "Failed to remove temporary file (%s)\n", strerror(errno));
     }
     ASSERT(session_check(restored) == 0);
     ASSERT(session_iscompat(session, restored));
