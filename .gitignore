@@ -1,5 +1,6 @@
 work
 validate
 test
+savefile
 *.o
 *.d
