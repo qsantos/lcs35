@@ -125,6 +125,7 @@ extern void session_delete(struct session* session) {
     mpz_clear(session->n_times_c);
     mpz_clear(session->w);
     mpz_clear(session->n);
+    mpz_clear(session->c);
     free(session);
 }
 
