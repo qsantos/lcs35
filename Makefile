@@ -13,7 +13,7 @@ validate: validate.o session.o util.o
 	@# MinGW wants source files before linker flags
 	$(CC) $^ $(LDFLAGS) -o $@
 
-test: test.o session.o util.o
+test: test.o session.o time.o util.o
 	@# MinGW wants source files before linker flags
 	$(CC) $^ $(LDFLAGS) -o $@
 

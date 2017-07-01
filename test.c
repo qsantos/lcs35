@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "session.h"
+#include "time.h"
 
 // C90
 #include <errno.h>
@@ -73,7 +74,33 @@ static void test_session(void) {
     session_delete(session);
 }
 
+static void test_time(void) {
+#define HTIME(seconds) do { \
+        human_time_both(buffer, sizeof(buffer), seconds); \
+        printf("%s\n", buffer); \
+    } while (0)
+    printf("Please check the following ETAs:\n");
+    char buffer[1024];
+    double minute = 60;
+    double hour = 60*minute;
+    double day = 24*hour;
+    double year = 365 * day;
+    HTIME(1033*year + 42*day + 3*hour + 49*minute + 37.7001);
+    HTIME(     year + 42*day + 3*hour + 49*minute + 37.7001);
+    HTIME(            42*day + 3*hour + 49*minute + 37.7001);
+    HTIME(               day + 3*hour + 49*minute + 37.7001);
+    HTIME(                     3*hour + 49*minute + 37.7001);
+    HTIME(                       hour + 49*minute + 37.7001);
+    HTIME(                              49*minute + 37.7001);
+    HTIME(                                 minute + 37.7001);
+    HTIME(                                          37.7001);
+    HTIME(                                           1.7001);
+    HTIME(                                           0.7001);
+#undef HTIME
+}
+
 extern int main(void) {
     test_session();
-    printf("Tests passed\n");
+    printf("Automatic tests passed\n");
+    test_time();
 }
