@@ -137,6 +137,7 @@ extern int main(int argc, char** argv) {
         .last = 0,
         .min_validations = min_validations,
     };
+    pthread_mutex_init(&queue.lock, NULL);
 
 #define N_THREADS 4
     pthread_t threads[N_THREADS];
@@ -158,6 +159,7 @@ extern int main(int argc, char** argv) {
     }
 
     // clean up
+    pthread_mutex_destroy(&queue.lock);
     for (size_t i = 0; i < n_sessions; i += 1) {
         session_delete(sessions[i]);
     }
