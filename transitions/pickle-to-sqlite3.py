@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import pickle
+import os.path
 import sqlite3
 
 
@@ -9,7 +10,7 @@ def _():
         with open(filename, 'rb') as f:
             d = pickle.load(f)
         for i, w in d['checkpoints'].items():
-            yield i, str(w), filename
+            yield i, str(w), os.path.basename(filename)
 
 
 with sqlite3.connect('lcs35.db') as db:

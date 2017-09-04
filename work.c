@@ -59,10 +59,10 @@ extern int main(int argc, char** argv) {
 
     struct session* session = session_new();
 
-    // trying to resume from normal session file
+    // try to resume from session file
     int ret = session_load(session, savefile);
     if (ret == 0) {
-        LOG(DEBUG, "session file not found");
+        LOG(DEBUG, "session file not found; starting from scratch");
         // continue
     } else if (ret == 1) {
         LOG(DEBUG, "session file valid; resuming from it");

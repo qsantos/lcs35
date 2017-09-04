@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+import os.path
 import sqlite3
 
 
@@ -7,7 +8,7 @@ def _():
     for filename in sys.argv[1:]:
         with open(filename) as f:
             t, i, c, n, w, *n_validations = f.readlines()
-        yield i, w, filename
+        yield i.strip(), w.strip(), os.path.basename(filename)
 
 
 with sqlite3.connect('lcs35.db') as db:
