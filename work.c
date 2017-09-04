@@ -77,6 +77,8 @@ extern int main(int argc, char** argv) {
     double prev_time = real_clock();
     show_progress(session->i, session->t, &prev_i, &prev_time);
 
+    double last_save = real_clock();
+
     while (session_work(session, 1ull<<20) != 0) {
         fprintf(stderr, "\r\33[K");  // clear line for errors messages
 
@@ -85,9 +87,13 @@ extern int main(int argc, char** argv) {
             exit(EXIT_FAILURE);
         }
 
-        if (session_save(session, savefile) != 0) {
-            LOG(FATAL, "failed to update session file!");
-            exit(EXIT_FAILURE);
+        double now = real_clock();
+        if (now - last_save >= 60.) {
+            if (session_save(session, savefile) != 0) {
+                LOG(FATAL, "failed to update session file!");
+                exit(EXIT_FAILURE);
+            }
+            last_save = now;
         }
 
         show_progress(session->i, session->t, &prev_i, &prev_time);
