@@ -85,36 +85,3 @@ extern size_t get_brand_string(char output[static 49]) {
     output[n_characters] = '\0';
     return n_characters;
 }
-
-extern int compat_rename(const char* srcfile, const char* dstfile) {
-    // ensure an atomic update using rename() on POSIX systems
-    if (rename(srcfile, dstfile) == 0) {
-        return 0;
-    }
-
-    if (errno != EEXIST) {
-        LOG(WARN, "failed to replace '%s' by '%s' (%s)", dstfile,srcfile,
-                 strerror(errno));
-        return -1;
-    }
-
-    // on non-POSIX systems (i.e. Windows), `rename()` might not accept
-    // to replace existing `oldpath` with `newpath`; we will have to
-    // hope that `remove()` followed by `rename()` is sufficient; if a
-    // crash happen in between, the user will have to rename the file
-    // by themselves
-
-    if (remove(dstfile) != 0) {
-        LOG(WARN, "failed to remove '%s' for replacement (%s)",
-                 dstfile, strerror(errno));
-        return -1;
-    }
-
-    if (rename(srcfile, dstfile) != 0) {
-        LOG(WARN, "failed to move '%s' to '%s' (%s)", srcfile, dstfile,
-                 strerror(errno));
-        return -1;
-    }
-
-    return 0;
-}

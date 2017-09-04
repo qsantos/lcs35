@@ -40,7 +40,4 @@ extern int asprintf(char** strp, const char* fmt, ...);
 
 extern size_t get_brand_string(char output[static 49]);
 
-/* rename()-compatible wrapper; atomicity guaranteed only on POSIX systems */
-extern int compat_rename(const char* srcfile, const char* dstfile);
-
 #endif

@@ -5,6 +5,9 @@
 // local includes
 #include "util.h"
 
+// external libraries
+#include <sqlite3.h>
+
 // POSIX 2008
 #include <sys/stat.h>
 #include <unistd.h>
@@ -39,24 +42,6 @@ static int fsync(int fd) {
     return 0;
 }
 #endif
-
-static size_t getnline(char* s, size_t n, FILE* f) {
-    /* Read until end of line or n-1 next characters */
-    size_t r = 0;
-    while (r < n-1) {
-        int c = fgetc(f);
-        if (c < 0) {
-            break;
-        }
-        s[r] = (char) c;
-        r += 1;
-        if (c == '\n') {
-            break;
-        }
-    }
-    s[r] = 0;
-    return r;
-}
 
 extern struct session* session_new(void) {
     // allocate memory
@@ -222,82 +207,40 @@ extern int session_load(struct session* session, const char* filename) {
         // file does not exist, nothing to resume
         return 0;
     }
-
-    // second, is it a regular file?
-    // this is required so that rename() can work properly
-    struct stat fileinfo;
-    int ret = fstat(fileno(f), &fileinfo);
-    if (ret != 0) {
-        LOG(WARN, "could not stat '%s' (%s)", filename, strerror(errno));
-        return -1;
-    }
-    if (!S_ISREG(fileinfo.st_mode)) {
-        LOG(WARN, "'%s' is not a regular file", filename);
+    if (fclose(f) != 0) {
+        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
         return -1;
     }
 
-    // file exist and is a regular file; we may use it to resume the
-    // previous session and to save checkpoints
-
-    // each line contains one paramater in ASCII decimal representation
-    // in order: t, i, c, n, w
-
-    // t
-    if (fscanf(f, "%"SCNu64"\n", &session->t) < 0) {
-        if (errno == 0) {
-            LOG(WARN, "unexpected end of file while reading t");
-        } else {
-            LOG(WARN, "failed to scan t (%s)", strerror(errno));
-        }
+    // open sqlite3 database
+    sqlite3* db;
+    if (sqlite3_open(filename, &db) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_open: %s", sqlite3_errmsg(db));
         return -1;
     }
 
-    // i
-    if (fscanf(f, "%"SCNu64"\n", &session->i) < 0) {
-        if (errno == 0) {
-            LOG(WARN, "unexpected end of file while reading i");
-        } else {
-            LOG(WARN, "failed to scan i (%s)", strerror(errno));
-        }
+    // load last checkpoint
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(
+            db, "SELECT i, w FROM checkpoint ORDER BY i DESC LIMIT 1", -1,
+            &stmt, NULL) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
         return -1;
     }
-
-    char line[1024];
-
-    // c
-    getnline(line, sizeof(line), f);
-    if (mpz_set_str(session->c, line, 10) < 0) {
-        LOG(WARN, "invalid decimal number c = %s", line);
-        return -1;
-    }
-
-    // n
-    getnline(line, sizeof(line), f);
-    if (mpz_set_str(session->n, line, 10) < 0) {
-        LOG(WARN, "invalid decimal number n = %s", line);
-        return -1;
-    }
-
-    // w
-    getnline(line, sizeof(line), f);
-    if (mpz_set_str(session->w, line, 10) < 0) {
-        LOG(WARN, "invalid decimal number w = %s", line);
-        return -1;
-    }
-
-    // n_validations
-    if (fscanf(f, "%d\n", &session->n_validations) < 0) {
-        if (errno == 0) {
-            // backwards-compatibility for session files without n_validations
-            session->n_validations = 0;
-        } else {
-            LOG(WARN, "failed to scan n_validations (%s)", strerror(errno));
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        session->i = (uint64_t) sqlite3_column_int64(stmt, 0);
+        const char* w = (const char*) sqlite3_column_text(stmt, 1);
+        if (mpz_set_str(session->w, w, 10) < 0) {
+            LOG(WARN, "invalid decimal number w = %s", w);
             return -1;
         }
     }
-
-    if (fclose(f) != 0) {
-        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
+    if (sqlite3_finalize(stmt) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_close(db) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_close: %s", sqlite3_errmsg(db));
         return -1;
     }
 
@@ -317,79 +260,53 @@ extern int session_load(struct session* session, const char* filename) {
 extern int session_save(const struct session* session, const char* filename) {
     /* Save progress into file */
 
-    // write in temporary file for atomic updates using rename()
-    // this require both files to be on the same filesystem
-    FILE* f = fopen(filename, "wb");
-    if (f == NULL) {
-        LOG(WARN, "could not open '%s' for writing (%s)", filename,
-            strerror(errno));
+    // open sqlite3 database
+    sqlite3* db;
+    if (sqlite3_open(filename, &db) != SQLITE_OK) {
+        LOG(WARN, "%s", sqlite3_errmsg(db));
         return -1;
     }
 
-    // each line contains one paramater in ASCII decimal representation
-    // in order: t, i, c, n, w
-
-    // t
-    if (fprintf(f, "%" PRIu64 "\n", session->t) < 0) {
-        LOG(WARN, "could not write t to temporary file (%s)", strerror(errno));
+    // create table if necessary
+    char* errmsg;
+    sqlite3_exec(
+        db, "CREATE TABLE IF NOT EXISTS checkpoint (i INTEGER UNIQUE, w TEXT, "
+        "time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)", NULL, NULL, &errmsg);
+    if (errmsg != NULL) {
+        LOG(WARN, "%s", errmsg);
         return -1;
     }
 
-    // i
-    if (fprintf(f, "%" PRIu64 "\n", session->i) < 0) {
-        LOG(WARN, "could not write i to temporary file (%s)", strerror(errno));
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, "INSERT INTO checkpoint (i, w) VALUES (?, ?)",
+                           -1, &stmt, NULL) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
         return -1;
     }
-
-    // c
-    char* str_c = mpz_get_str(NULL, 10, session->c);
-    if (str_c == NULL) {
-        LOG(WARN, "failed to convert c to decimal");
+    if (sqlite3_bind_int64(stmt, 1, (sqlite_int64) session->i) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
         return -1;
     }
-    if (fprintf(f, "%s\n", str_c) < 0) {
-        LOG(WARN, "failed to write c to temporary file (%s)", strerror(errno));
-        return -1;
-    }
-    free(str_c);
-
-    // n
-    char* str_n = mpz_get_str(NULL, 10, session->n);
-    if (str_n == NULL) {
-        LOG(WARN, "failed to convert n to decimal");
-        return -1;
-    }
-    if (fprintf(f, "%s\n", str_n) < 0) {
-        LOG(WARN, "failed to write n to temporary file (%s)", strerror(errno));
-        return -1;
-    }
-    free(str_n);
-
-    // w
     char* str_w = mpz_get_str(NULL, 10, session->w);
     if (str_w == NULL) {
         LOG(WARN, "failed to convert w to decimal");
         return -1;
     }
-    if (fprintf(f, "%s\n", str_w) < 0) {
-        LOG(WARN, "failed to write w to temporary file (%s)", strerror(errno));
+    if (sqlite3_bind_text(stmt, 2, str_w, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
         return -1;
     }
     free(str_w);
-
-    // n_validations
-    if (fprintf(f, "%d\n", session->n_validations) < 0) {
-        LOG(WARN, "could not write n_validations to temporary file (%s)",
-            strerror(errno));
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "sqlite3_step: %s", sqlite3_errmsg(db));
         return -1;
     }
-
-    // actually write to disk before replacing previous files
-    fflush(f);  // flush user-space buffers
-    fsync(fileno(f));  // flush kernel buffers and disk cache
-
-    if (fclose(f) != 0) {
-        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
+    if (sqlite3_finalize(stmt) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_close(db) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_close: %s", sqlite3_errmsg(db));
         return -1;
     }
 

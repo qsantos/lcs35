@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes -Wvla -O3
-LDFLAGS = -O3 -lgmp -lpthread
+LDFLAGS = -O3 -lgmp -lpthread -lsqlite3
 TARGETS = work validate test
 
 all: $(TARGETS)
