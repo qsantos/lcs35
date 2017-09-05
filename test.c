@@ -16,19 +16,14 @@
     }
 
 static void test_session(void) {
-    // session_new(), session_check(), session_iscompat(), session_isafter()
+    // session_new(), session_check()
     struct session* session = session_new();
     ASSERT(session != NULL);
     ASSERT(session_check(session) == 0);
-    ASSERT(session_iscompat(session, session));
-    ASSERT(session_isafter(session, session));
 
     // session_copy()
     struct session* copy = session_copy(session);
     ASSERT(copy != NULL);
-    ASSERT(session_iscompat(session, copy));
-    ASSERT(session_isafter(session, copy));
-    ASSERT(session_isafter(copy, session));
     session_delete(copy);
 
     // alter session for further tests
@@ -53,9 +48,6 @@ static void test_session(void) {
         LOG(ERR, "Failed to remove temporary file (%s)\n", strerror(errno));
     }
     ASSERT(session_check(restored) == 0);
-    ASSERT(session_iscompat(session, restored));
-    ASSERT(session_isafter(session, restored));
-    ASSERT(session_isafter(restored, session));
     session_delete(session);
     session = restored;
 

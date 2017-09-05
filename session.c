@@ -313,24 +313,6 @@ extern int session_save(const struct session* session, const char* filename) {
     return 0;
 }
 
-extern int session_iscompat(const struct session* session1,
-                            const struct session* session2) {
-    if (mpz_cmp(session1->c, session2->c) != 0) {
-        return 0;
-    }
-
-    if (mpz_cmp(session1->n, session2->n) != 0) {
-        return 0;
-    }
-
-    return 1;
-}
-
-extern int session_isafter(const struct session* before,
-                           const struct session* after) {
-    return session_iscompat(before, after) && before->i <= after->i;
-}
-
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 extern uint64_t session_work(struct session* session, uint64_t amount) {
