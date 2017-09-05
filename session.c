@@ -82,7 +82,6 @@ extern struct session* session_new(void) {
     mpz_init(session->n_times_c);
     mpz_mul(session->n_times_c, session->n, session->c);
 
-    session->n_validations = 0;
     return session;
 }
 
@@ -100,8 +99,6 @@ extern struct session* session_copy(const struct session* session) {
     mpz_init_set(ret->n, session->n);
     mpz_init_set(ret->w, session->w);
     mpz_init_set(ret->n_times_c, session->n_times_c);
-    ret->n_validations = session->n_validations;
-    ret->metadata = session->metadata;
 
     return ret;
 }

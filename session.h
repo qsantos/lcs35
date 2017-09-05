@@ -14,8 +14,6 @@ struct session {
     mpz_t n;  // modulus (product of two primes)
     mpz_t w;  // computed power of 2
     mpz_t n_times_c;  // pre-computed value of n*c for convenience
-    int n_validations;  // number of validations from intermediate results
-    const char* metadata;
 };
 
 extern struct session* session_new(void);
