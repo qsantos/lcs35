@@ -1,6 +1,12 @@
 #include "session.h"
 #include "util.h"
 
+// external libraries
+#include <sqlite3.h>
+
+// C99
+#include <inttypes.h>
+
 // C90
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,18 +14,6 @@
 
 // POSIX
 #include <pthread.h>
-
-static int session_cmp(const void* _a, const void* _b) {
-    struct session* const* a = _a;
-    struct session* const* b = _b;
-    if ((*a)->i > (*b)->i) {
-        return 1;
-    } else if ((*a)->i == (*b)->i) {
-        return 0;
-    } else {
-        return -1;
-    }
-}
 
 static void validate_session(const struct session* session,
                       const struct session* previous) {
@@ -30,8 +24,8 @@ static void validate_session(const struct session* session,
     while (session_work(redo, 1ull<<20)) {
         uint64_t work_done = redo->i - previous->i;
         double progress = (double) work_done / (double) work_todo;
-        printf("%s -> %s: %5.1f%%\n", previous->metadata, session->metadata,
-               100*progress);
+        printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
+               previous->i, session->i, 100*progress);
     }
     redo->t = session->t; // restore target exponent
 
@@ -42,49 +36,62 @@ static void validate_session(const struct session* session,
         exit(EXIT_FAILURE);
     }
     if (mpz_cmp(redo->w, session->w) != 0) {
-        LOG(ERR, "INVALID %s -> %s", previous->metadata, session->metadata);
+        LOG(ERR, "INVALID %#.12" PRIx64 " -> %#.12" PRIx64, previous->i,
+            session->i);
     }
-
-    // replace validated session file with updated n_validations
-    redo->n_validations += 1;
-    session_save(redo, session->metadata);
 
     // clean up
     session_delete(redo);
 }
 
-struct sessions_queue {
-    struct session** sessions;
-    size_t n_sessions;
-    size_t last;
-    int min_validations;
+struct checkpoints_queue {
     pthread_mutex_t lock;
+    /* query for all checkpoints in increasing order of i */
+    sqlite3_stmt* stmt_checkkpoints;
+    /* values for i and w before the checkpoint returned by next call to
+     * sqlite3_step(stmt_checkkpoints) */
+    uint64_t last_i;
+    mpz_t last_w;
 };
 
 static void* worker(void* argument) {
-    struct sessions_queue* queue = argument;
+    struct checkpoints_queue* queue = argument;
+
+    /* checks will be done by running session_validate() from session_a to
+     * session_b */
+    struct session* session_a = session_new();
+    struct session* session_b = session_new();
 
     while (1) {
-        // obtain task (could be made lockless using C11 atomics)
         pthread_mutex_lock(&queue->lock);
-        queue->last += 1;
-        size_t task = queue->last;
-        pthread_mutex_unlock(&queue->lock);
-
-        if (task >= queue->n_sessions) {
-            // no more work
+        if (sqlite3_step(queue->stmt_checkkpoints) != SQLITE_ROW) {
             break;
         }
 
-        if (queue->sessions[task]->n_validations > queue->min_validations) {
-            // priorize validating least-validated sessions
-            continue;
+        // use parameters from current row for session_b
+        session_b->i = (uint64_t) sqlite3_column_int64(queue->stmt_checkkpoints, 0);
+        const char* str_w = (const char*) sqlite3_column_text(queue->stmt_checkkpoints, 1);
+        if (mpz_set_str(session_b->w, str_w, 10) < 0) {
+            LOG(FATAL, "invalid decimal number w = %s", str_w);
+            exit(EXIT_FAILURE);
         }
 
+        // use last parameters from queue for session_a
+        session_a->i = queue->last_i;
+        mpz_set(session_a->w, queue->last_w);
+
+        // before releasing the lock, update queue information
+        queue->last_i = session_b->i;
+        mpz_set(queue->last_w, session_b->w);
+
+        pthread_mutex_unlock(&queue->lock);
+
         // complete the task
-        validate_session(queue->sessions[task], queue->sessions[task-1]);
+        validate_session(session_b, session_a);
     }
 
+    session_delete(session_b);
+    session_delete(session_a);
     return NULL;
 }
 
@@ -93,54 +100,35 @@ extern int main(int argc, char** argv) {
     parse_debug_args(&argc, argv);
 
     // allocate array of session pointers
-    size_t n_sessions = (size_t) argc;  // number of arguments + 1 from scratch
-    struct session** sessions = malloc(sizeof(struct session*) * n_sessions);
-    if (sessions == NULL) {
-        LOG(FATAL, "failed to allocate memory for sessions");
+    if (argc != 2) {
+        LOG(FATAL, "usage: %s savefile.db", argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    // load sessions from files given in program arguments
-    sessions[0] = session_new();
-    for (int i = 1; i < argc; i += 1) {
-        struct session* session = session_new();
-        const char* filename = argv[i];
-        if (session_load(session, filename) < 0) {
-            LOG(FATAL, "failed to load session file '%s'", filename);
-            exit(EXIT_FAILURE);
-        }
-        session->metadata = filename;
-        sessions[i] = session;
+    // make sure sqlite3 is thread-safe
+    if (!sqlite3_threadsafe()) {
+        LOG(FATAL, "SQLite is not threadsafe");
+        exit(EXIT_FAILURE);
     }
 
-    // check compatibility of sessions
-    for (size_t i = 1; i < n_sessions; i += 1) {
-        if (!session_iscompat(sessions[i-1], sessions[i])) {
-            LOG(FATAL, "session files '%s' and '%s' are not compatible",
-                sessions[i-1]->metadata, sessions[i]->metadata);
-            exit(EXIT_FAILURE);
-        }
+    // open sqlite3 database
+    sqlite3* db;
+    if (sqlite3_open(argv[1], &db) != SQLITE_OK) {
+        LOG(FATAL, "sqlite3_open: %s", sqlite3_errmsg(db));
+        exit(EXIT_FAILURE);
     }
 
-    // sort sessions by progress
-    qsort(sessions, n_sessions, sizeof(struct session*), session_cmp);
-
-    // find the lowest number of validations made on any session
-    // the first session (started from scratch) does not need to be validated
-    int min_validations = sessions[1]->n_validations;
-    for (size_t i = 2; i < n_sessions; i += 1) {
-        if (sessions[i]->n_validations < min_validations) {
-            min_validations = sessions[i]->n_validations;
-        }
-    }
-
-    struct sessions_queue queue = {
-        .sessions = sessions,
-        .n_sessions = n_sessions,
-        .last = 0,
-        .min_validations = min_validations,
+    struct checkpoints_queue queue = {
+        .last_i = 0,
     };
+    mpz_init_set_ui(queue.last_w, 2);
     pthread_mutex_init(&queue.lock, NULL);
+
+    if (sqlite3_prepare_v2(db, "SELECT i, w FROM checkpoint ORDER BY i", -1,
+                           &queue.stmt_checkkpoints, NULL) != SQLITE_OK) {
+        LOG(FATAL, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
+        exit(EXIT_FAILURE);
+    }
 
 #define N_THREADS 4
     pthread_t threads[N_THREADS];
@@ -162,8 +150,8 @@ extern int main(int argc, char** argv) {
     }
 
     // clean up
+    sqlite3_finalize(queue.stmt_checkkpoints);
+    mpz_clear(queue.last_w);
     pthread_mutex_destroy(&queue.lock);
-    for (size_t i = 0; i < n_sessions; i += 1) {
-        session_delete(sessions[i]);
-    }
+    return EXIT_SUCCESS;
 }
