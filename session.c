@@ -266,9 +266,13 @@ extern int session_save(const struct session* session, const char* filename) {
 
     // create table if necessary
     char* errmsg;
-    sqlite3_exec(
-        db, "CREATE TABLE IF NOT EXISTS checkpoint (i INTEGER UNIQUE, w TEXT, "
-        "time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)", NULL, NULL, &errmsg);
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS checkpoint ("
+        "    i INTEGER UNIQUE,"
+        "    w TEXT,"
+        "    first_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+        "    last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ");", NULL, NULL, &errmsg);
     if (errmsg != NULL) {
         LOG(WARN, "%s", errmsg);
         return -1;
