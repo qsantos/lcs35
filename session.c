@@ -279,8 +279,10 @@ extern int session_save(const struct session* session, const char* filename) {
     }
 
     sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, "INSERT INTO checkpoint (i, w) VALUES (?, ?)",
-                           -1, &stmt, NULL) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(
+            db, "INSERT OR IGNORE INTO checkpoint (i, w) VALUES (?, ?)",
+            -1, &stmt, NULL
+    ) != SQLITE_OK) {
         LOG(WARN, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
         return -1;
     }

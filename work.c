@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,23 @@ static void show_progress(uint64_t i, uint64_t t,
     *prev_time = now;
 }
 
+/* when SIGINT is hit, just save the current work and exit
+ * NOTE: the handler should be registered *after* the session is fully
+ * loaded; otherwise, a badly timed SIGINT might save an empty session */
+struct session* session = NULL;
+const char* savefile = "savefile.db";
+void handle_sigint(int sig){
+    if (sig != SIGINT) {
+        return;
+    }
+    fprintf(stderr, "\r");
+    if (session_save(session, savefile) != 0) {
+        LOG(FATAL, "failed to update session file!");
+        exit(EXIT_FAILURE);
+    }
+    exit(EXIT_SUCCESS);
+}
+
 extern int main(int argc, char** argv) {
     if (setlocale(LC_ALL, "") == NULL) {
         LOG(WARN, "failed to set locale (%s)", strerror(errno));
@@ -47,7 +65,6 @@ extern int main(int argc, char** argv) {
 
     // parse arguments
     parse_debug_args(&argc, argv);
-    const char* savefile = "savefile.db";
     if (argc == 2) {
         savefile = argv[1];
     }
@@ -57,7 +74,7 @@ extern int main(int argc, char** argv) {
     get_brand_string(brand_string);
     printf("%s\n", brand_string);
 
-    struct session* session = session_new();
+    session = session_new();
 
     // try to resume from session file
     int ret = session_load(session, savefile);
@@ -71,6 +88,9 @@ extern int main(int argc, char** argv) {
         LOG(FATAL, "session file invalid");
         exit(EXIT_FAILURE);
     }
+
+    // register signal handler for SIGINT
+    signal(SIGINT, handle_sigint);
 
     // initialize timer
     uint64_t prev_i = session->i;
