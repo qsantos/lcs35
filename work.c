@@ -50,7 +50,7 @@ void handle_sigint(int sig){
     if (sig != SIGINT) {
         return;
     }
-    fprintf(stderr, "\r");
+    fprintf(stderr, "\r\33[K");  // clear line
     if (session_save(session, savefile) != 0) {
         LOG(FATAL, "failed to update session file!");
         exit(EXIT_FAILURE);
@@ -116,7 +116,8 @@ extern int main(int argc, char** argv) {
     }
 
     // one can only dream...
-    fprintf(stderr, "\rCalculation complete.\n");
+    fprintf(stderr, "\r\33[K");  // clear line
+    fprintf(stderr, "Calculation complete.\n");
     mpz_mod(session->w, session->w, session->n);
     char* str_w = mpz_get_str(NULL, 10, session->w);
     if (str_w == NULL) {
