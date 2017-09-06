@@ -15,7 +15,7 @@
 // POSIX
 #include <pthread.h>
 
-static void validate_session(const struct session* session,
+static void session_validate(const struct session* session,
                       const struct session* previous) {
     // redo the work from previous session to session to validate
     struct session* redo = session_copy(previous);
@@ -87,7 +87,7 @@ static void* worker(void* argument) {
         pthread_mutex_unlock(&queue->lock);
 
         // complete the task
-        validate_session(session_b, session_a);
+        session_validate(session_b, session_a);
     }
 
     session_delete(session_b);
