@@ -15,37 +15,10 @@
 // POSIX
 #include <pthread.h>
 
-static void session_validate(const struct session* session,
-                      const struct session* previous) {
-    // redo the work from previous session to session to validate
-    struct session* redo = session_copy(previous);
-    redo->t = session->i; // stop when session to validate is reached
-    uint64_t work_todo = redo->t - previous->i;
-    while (session_work(redo, 1ull<<20)) {
-        uint64_t work_done = redo->i - previous->i;
-        double progress = (double) work_done / (double) work_todo;
-        printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
-               previous->i, session->i, 100*progress);
-    }
-    redo->t = session->t; // restore target exponent
-
-    // compare new result to session to validate
-    if (redo->i != session->i) {
-        // that should not happen
-        LOG(FATAL, "mismatched exponents; this is most peculiar");
-        exit(EXIT_FAILURE);
-    }
-    if (mpz_cmp(redo->w, session->w) != 0) {
-        LOG(ERR, "INVALID %#.12" PRIx64 " -> %#.12" PRIx64, previous->i,
-            session->i);
-    }
-
-    // clean up
-    session_delete(redo);
-}
-
 struct checkpoints_queue {
     pthread_mutex_t lock;
+    /* database handle */
+    sqlite3* db;
     /* query for all checkpoints in increasing order of i */
     sqlite3_stmt* stmt_checkkpoints;
     /* values for i and w before the checkpoint returned by next call to
@@ -57,41 +30,68 @@ struct checkpoints_queue {
 static void* worker(void* argument) {
     struct checkpoints_queue* queue = argument;
 
-    /* checks will be done by running session_validate() from session_a to
-     * session_b */
-    struct session* session_a = session_new();
-    struct session* session_b = session_new();
+    /* session used to redo the computations */
+    struct session* session = session_new();
+    mpz_t next_w;
+    mpz_init(next_w);
 
     while (1) {
         pthread_mutex_lock(&queue->lock);
         if (sqlite3_step(queue->stmt_checkkpoints) != SQLITE_ROW) {
+            pthread_mutex_unlock(&queue->lock);
             break;
         }
 
-        // use parameters from current row for session_b
-        session_b->i = (uint64_t) sqlite3_column_int64(queue->stmt_checkkpoints, 0);
+        uint64_t next_i = (uint64_t) sqlite3_column_int64(queue->stmt_checkkpoints, 0);
         const char* str_w = (const char*) sqlite3_column_text(queue->stmt_checkkpoints, 1);
-        if (mpz_set_str(session_b->w, str_w, 10) < 0) {
+        if (mpz_set_str(next_w, str_w, 10) < 0) {
             LOG(FATAL, "invalid decimal number w = %s", str_w);
+            pthread_mutex_unlock(&queue->lock);
             exit(EXIT_FAILURE);
         }
 
-        // use last parameters from queue for session_a
-        session_a->i = queue->last_i;
-        mpz_set(session_a->w, queue->last_w);
+        // use last parameters from queue for session
+        uint64_t last_i = queue->last_i;  // save it to compute progress
+        session->i = last_i;
+        mpz_set(session->w, queue->last_w);
 
         // before releasing the lock, update queue information
-        queue->last_i = session_b->i;
-        mpz_set(queue->last_w, session_b->w);
+        queue->last_i = next_i;
+        mpz_set(queue->last_w, next_w);
 
         pthread_mutex_unlock(&queue->lock);
 
-        // complete the task
-        session_validate(session_b, session_a);
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+        // work from previous checkpoint; make new ones every regularly
+        session->t = ((session->i >> 25) + 1) << 25;  // next multiple of 2**25
+        while (session->t < next_i) {
+
+            while (session_work(session, 1ull<<20)) {
+                double progress = (double) (session->i - last_i) / (double) (next_i - last_i);
+                printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
+                       last_i, session->i, 100*progress);
+            }
+            session_checkpoint_insert(session, queue->db);
+            session->t += 1 << 25;
+        }
+
+        // complete checking up to next checkpoint
+        session->t = next_i;
+        while (session_work(session, 1ull<<20)) {
+            double progress = (double) (session->i - last_i) / (double) (next_i - last_i);
+            printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
+                   last_i, session->i, 100*progress);
+        }
+        session_checkpoint_update(session, queue->db);
+
+        if (mpz_cmp(session->w, next_w) != 0) {
+            LOG(ERR, "INVALID %#.12" PRIx64 " -> %#.12" PRIx64, last_i,
+                session->i);
+        }
     }
 
-    session_delete(session_b);
-    session_delete(session_a);
+    session_delete(session);
     return NULL;
 }
 
@@ -105,18 +105,12 @@ extern int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    // make sure sqlite3 is thread-safe
+    // make sure sqlite3 is serialized
     if (!sqlite3_threadsafe()) {
         LOG(FATAL, "SQLite is not threadsafe");
         exit(EXIT_FAILURE);
     }
-
-    // open sqlite3 database
-    sqlite3* db;
-    if (sqlite3_open(argv[1], &db) != SQLITE_OK) {
-        LOG(FATAL, "sqlite3_open: %s", sqlite3_errmsg(db));
-        exit(EXIT_FAILURE);
-    }
+    sqlite3_config(SQLITE_CONFIG_SERIALIZED);
 
     struct checkpoints_queue queue = {
         .last_i = 0,
@@ -124,9 +118,15 @@ extern int main(int argc, char** argv) {
     mpz_init_set_ui(queue.last_w, 2);
     pthread_mutex_init(&queue.lock, NULL);
 
-    if (sqlite3_prepare_v2(db, "SELECT i, w FROM checkpoint ORDER BY i", -1,
+    // open sqlite3 database
+    if (sqlite3_open(argv[1], &queue.db) != SQLITE_OK) {
+        LOG(FATAL, "sqlite3_open: %s", sqlite3_errmsg(queue.db));
+        exit(EXIT_FAILURE);
+    }
+
+    if (sqlite3_prepare_v2(queue.db, "SELECT i, w FROM checkpoint ORDER BY i", -1,
                            &queue.stmt_checkkpoints, NULL) != SQLITE_OK) {
-        LOG(FATAL, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
+        LOG(FATAL, "sqlite3_prepare_v2: %s", sqlite3_errmsg(queue.db));
         exit(EXIT_FAILURE);
     }
 
