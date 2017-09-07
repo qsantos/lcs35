@@ -23,7 +23,10 @@ extern void session_delete(struct session* session);
 
 extern int session_check(const struct session* session);  // return 0 if ok
 extern int session_load(struct session* session, sqlite3* db);
-extern int session_save(const struct session* session, sqlite3* db);
+
+extern int session_checkpoint_append(const struct session* session, sqlite3* db);
+extern int session_checkpoint_insert(const struct session* session, sqlite3* db);
+extern int session_checkpoint_update(const struct session* session, sqlite3* db);
 
 extern uint64_t session_work(struct session* session, uint64_t amount);
 

@@ -223,8 +223,8 @@ extern int session_load(struct session* session, sqlite3* db) {
     return 1;
 }
 
-extern int session_save(const struct session* session, sqlite3* db) {
-    /* Save progress into database */
+extern int session_checkpoint_append(const struct session* session, sqlite3* db) {
+    /* Create a new checkpoint; values were computed for the first time */
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(
@@ -248,6 +248,70 @@ extern int session_save(const struct session* session, sqlite3* db) {
         return -1;
     }
     free(str_w);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "sqlite3_step: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_finalize(stmt) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+
+    return 0;
+}
+
+extern int session_checkpoint_insert(const struct session* session, sqlite3* db) {
+    /* Create a new checkpoint; values were not computed for the first time */
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db,
+            "INSERT INTO checkpoint (i, w, first_computed) VALUES (?, ?, NULL)",
+            -1, &stmt, NULL
+    ) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_bind_int64(stmt, 1, (sqlite_int64) session->i) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    char* str_w = mpz_get_str(NULL, 10, session->w);
+    if (str_w == NULL) {
+        LOG(WARN, "failed to convert w to decimal");
+        return -1;
+    }
+    if (sqlite3_bind_text(stmt, 2, str_w, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    free(str_w);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        LOG(WARN, "sqlite3_step: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_finalize(stmt) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+
+    return 0;
+}
+
+extern int session_checkpoint_update(const struct session* session, sqlite3* db) {
+    /* Update last time the values of a checkpoint were computed */
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db,
+        "UPDATE checkpoint SET last_computed = CURRENT_TIMESTAMP WHERE i = ?",
+            -1, &stmt, NULL
+    ) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_prepare_v2: %s", sqlite3_errmsg(db));
+        return -1;
+    }
+    if (sqlite3_bind_int64(stmt, 1, (sqlite_int64) session->i) != SQLITE_OK) {
+        LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
+        return -1;
+    }
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         LOG(WARN, "sqlite3_step: %s", sqlite3_errmsg(db));
         return -1;

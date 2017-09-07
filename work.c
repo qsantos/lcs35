@@ -51,7 +51,7 @@ void handle_sigint(int sig){
         return;
     }
     fprintf(stderr, "\r\33[K");  // clear line
-    if (session_save(session, db) != 0) {
+    if (session_checkpoint_append(session, db) != 0) {
         LOG(FATAL, "failed to update session file!");
         exit(EXIT_FAILURE);
     }
@@ -127,7 +127,7 @@ extern int main(int argc, char** argv) {
         }
 
         if ((session->i >> 20) % 32 == 0) {
-            if (session_save(session, db) != 0) {
+            if (session_checkpoint_append(session, db) != 0) {
                 LOG(FATAL, "failed to update session file!");
                 exit(EXIT_FAILURE);
             }
