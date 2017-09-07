@@ -70,7 +70,7 @@ static void* worker(void* argument) {
             while (session_work(session, 1ull<<20)) {
                 double progress = (double) (session->i - last_i) / (double) (next_i - last_i);
                 printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
-                       last_i, session->i, 100*progress);
+                       last_i, next_i, 100*progress);
             }
             session_checkpoint_insert(session, queue->db);
             session->t += 1 << 25;
@@ -81,7 +81,7 @@ static void* worker(void* argument) {
         while (session_work(session, 1ull<<20)) {
             double progress = (double) (session->i - last_i) / (double) (next_i - last_i);
             printf("%#.12" PRIx64 " -> %#.12" PRIx64 ": %5.1f%%\n",
-                   last_i, session->i, 100*progress);
+                   last_i, next_i, 100*progress);
         }
         session_checkpoint_update(session, queue->db);
 
