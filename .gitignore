@@ -1,5 +1,6 @@
 work
 validate
+supervisor
 savefile
 *.o
 *.d
