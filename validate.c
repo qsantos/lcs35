@@ -98,8 +98,6 @@ static void* worker(void* argument) {
 extern int main(int argc, char** argv) {
     // pre-parse arguments
     parse_debug_args(&argc, argv);
-
-    // allocate array of session pointers
     if (argc != 2) {
         LOG(FATAL, "usage: %s savefile.db", argv[0]);
         exit(EXIT_FAILURE);
