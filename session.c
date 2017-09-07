@@ -5,9 +5,6 @@
 // local includes
 #include "util.h"
 
-// external libraries
-#include <sqlite3.h>
-
 // POSIX 2008
 #include <sys/stat.h>
 #include <unistd.h>
@@ -185,36 +182,12 @@ extern int session_check(const struct session* session) {
     return 0;
 }
 
-extern int session_load(struct session* session, const char* filename) {
-    /* Resume progress from file
+extern int session_load(struct session* session, sqlite3* db) {
+    /* Resume progress from database
      *
      * returns 1 if session was resumed
      * returns 0 if no session was found
      * returns -1 if an error was encountered */
-
-    // first, does the file exists?
-    FILE* f = fopen(filename, "r");
-    if (f == NULL) {
-        if (errno != ENOENT) {
-            // file may exist but another error stops us from reading it
-            LOG(WARN, "could not open '%s' for reading (%s)", filename,
-                strerror(errno));
-            return -1;
-        }
-        // file does not exist, nothing to resume
-        return 0;
-    }
-    if (fclose(f) != 0) {
-        LOG(WARN, "failed to close '%s' (%s)", filename, strerror(errno));
-        return -1;
-    }
-
-    // open sqlite3 database
-    sqlite3* db;
-    if (sqlite3_open(filename, &db) != SQLITE_OK) {
-        LOG(WARN, "sqlite3_open: %s", sqlite3_errmsg(db));
-        return -1;
-    }
 
     // load last checkpoint
     sqlite3_stmt* stmt;
@@ -236,14 +209,10 @@ extern int session_load(struct session* session, const char* filename) {
         LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
         return -1;
     }
-    if (sqlite3_close(db) != SQLITE_OK) {
-        LOG(WARN, "sqlite3_close: %s", sqlite3_errmsg(db));
-        return -1;
-    }
 
     // finally, does the data look good?
     if (session_check(session) != 0) {
-        LOG(WARN, "data from '%s' looks incorrect", filename);
+        LOG(WARN, "data looks incorrect");
         return -1;
     }
 
@@ -254,29 +223,8 @@ extern int session_load(struct session* session, const char* filename) {
     return 1;
 }
 
-extern int session_save(const struct session* session, const char* filename) {
-    /* Save progress into file */
-
-    // open sqlite3 database
-    sqlite3* db;
-    if (sqlite3_open(filename, &db) != SQLITE_OK) {
-        LOG(WARN, "%s", sqlite3_errmsg(db));
-        return -1;
-    }
-
-    // create table if necessary
-    char* errmsg;
-    sqlite3_exec(db,
-        "CREATE TABLE IF NOT EXISTS checkpoint ("
-        "    i INTEGER UNIQUE,"
-        "    w TEXT,"
-        "    first_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-        "    last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        ");", NULL, NULL, &errmsg);
-    if (errmsg != NULL) {
-        LOG(WARN, "%s", errmsg);
-        return -1;
-    }
+extern int session_save(const struct session* session, sqlite3* db) {
+    /* Save progress into database */
 
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(
@@ -306,10 +254,6 @@ extern int session_save(const struct session* session, const char* filename) {
     }
     if (sqlite3_finalize(stmt) != SQLITE_OK) {
         LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
-        return -1;
-    }
-    if (sqlite3_close(db) != SQLITE_OK) {
-        LOG(WARN, "sqlite3_close: %s", sqlite3_errmsg(db));
         return -1;
     }
 

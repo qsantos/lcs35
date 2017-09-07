@@ -45,13 +45,13 @@ static void show_progress(uint64_t i, uint64_t t,
  * NOTE: the handler should be registered *after* the session is fully
  * loaded; otherwise, a badly timed SIGINT might save an empty session */
 struct session* session = NULL;
-const char* savefile = "savefile.db";
+sqlite3* db;
 void handle_sigint(int sig){
     if (sig != SIGINT) {
         return;
     }
     fprintf(stderr, "\r\33[K");  // clear line
-    if (session_save(session, savefile) != 0) {
+    if (session_save(session, db) != 0) {
         LOG(FATAL, "failed to update session file!");
         exit(EXIT_FAILURE);
     }
@@ -65,6 +65,7 @@ extern int main(int argc, char** argv) {
 
     // parse arguments
     parse_debug_args(&argc, argv);
+    const char* savefile = "savefile.db";
     if (argc == 2) {
         savefile = argv[1];
     }
@@ -74,10 +75,30 @@ extern int main(int argc, char** argv) {
     get_brand_string(brand_string);
     printf("%s\n", brand_string);
 
+    // open sqlite3 database
+    if (sqlite3_open(savefile, &db) != SQLITE_OK) {
+        LOG(FATAL, "%s", sqlite3_errmsg(db));
+        return 1;
+    }
+
+    // create table if necessary
+    char* errmsg;
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS checkpoint ("
+        "    i INTEGER UNIQUE,"
+        "    w TEXT,"
+        "    first_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+        "    last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ");", NULL, NULL, &errmsg);
+    if (errmsg != NULL) {
+        LOG(FATAL, "%s", errmsg);
+        return 1;
+    }
+
     session = session_new();
 
     // try to resume from session file
-    int ret = session_load(session, savefile);
+    int ret = session_load(session, db);
     if (ret == 0) {
         LOG(DEBUG, "session file not found; starting from scratch");
         // continue
@@ -106,7 +127,7 @@ extern int main(int argc, char** argv) {
         }
 
         if ((session->i >> 20) % 32 == 0) {
-            if (session_save(session, savefile) != 0) {
+            if (session_save(session, db) != 0) {
                 LOG(FATAL, "failed to update session file!");
                 exit(EXIT_FAILURE);
             }
@@ -129,5 +150,9 @@ extern int main(int argc, char** argv) {
 
     // clean up
     session_delete(session);
+    if (sqlite3_close(db) != SQLITE_OK) {
+        LOG(FATAL, "sqlite3_close: %s", sqlite3_errmsg(db));
+        return -1;
+    }
     return EXIT_SUCCESS;
 }

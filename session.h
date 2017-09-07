@@ -1,8 +1,9 @@
 #ifndef SESSION_H
 #define SESSION_H
 
-// libraries
+// external libraries
 #include <gmp.h>
+#include <sqlite3.h>
 
 // C99
 #include <stdint.h>
@@ -21,8 +22,8 @@ extern struct session* session_copy(const struct session* session);
 extern void session_delete(struct session* session);
 
 extern int session_check(const struct session* session);  // return 0 if ok
-extern int session_load(struct session* session, const char* filename);
-extern int session_save(const struct session* session, const char* filename);
+extern int session_load(struct session* session, sqlite3* db);
+extern int session_save(const struct session* session, sqlite3* db);
 
 extern uint64_t session_work(struct session* session, uint64_t amount);
 
