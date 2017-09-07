@@ -4,6 +4,9 @@
 // external libraries
 #include <sqlite3.h>
 
+// POSIX
+#include <pthread.h>
+
 // C99
 #include <inttypes.h>
 
@@ -11,9 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// POSIX
-#include <pthread.h>
 
 struct checkpoints_queue {
     pthread_mutex_t lock;
