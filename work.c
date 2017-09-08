@@ -4,6 +4,10 @@
 #include "util.h"
 #include "time.h"
 #include "session.h"
+#include "socket.h"
+
+// POSIX
+#include <unistd.h>
 
 // C99
 #include <inttypes.h>
@@ -16,6 +20,90 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int get_work(const char* address, const char* port, struct session* session) {
+    int server = tcp_connect(address, port);
+    if (server < 0) {
+        LOG(WARN, "failed to connect to %s:%s", address, port);
+        return -1;
+    }
+    ssize_t n = write(server, "resume:", 7);
+    if (n < 0) {
+        LOG(WARN, "failed to send command to supervisor");
+        return -1;
+    }
+    char buffer[1024];
+    n = read(server, buffer, sizeof(buffer) - 1);
+    if (n < 0) {
+        LOG(WARN, "failed to obtain response from supervisor");
+        return -1;
+    }
+    buffer[n] = 0;
+    LOG(DEBUG, "buffer: <%s>", buffer);
+    if (close(server) < 0) {
+        LOG(WARN, "failed to close connection to supervisor");
+        return -1;
+    }
+
+    char* str_w;
+    uint64_t i = strtoul(buffer, &str_w, 0);
+    session->i = i;
+    if (*str_w != ':') {
+        LOG(WARN, "missing colon after i in data");
+        return -1;
+    }
+    str_w += 1;
+    if (mpz_set_str(session->w, str_w, 0) < 0) {
+        LOG(WARN, "missing to parse w");
+        return -1;
+    }
+    if (session_check(session) != 0) {
+        LOG(WARN, "inconsistent input from supervisor");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int save_work(const char* address, const char* port, struct session* session) {
+    if (session_check(session) != 0) {
+        LOG(WARN, "inconsistency detected");
+        return -1;
+    }
+
+    // prepare message
+    char* str_w = mpz_get_str(NULL, 10, session->w);
+    if (str_w == NULL) {
+        LOG(WARN, "failed to convert w to decimal");
+        return -1;
+    }
+    char buffer[1024];
+    ssize_t n = snprintf(buffer, sizeof(buffer), "save:%#"PRIx64":%s", session->i, str_w);
+    if (n < 0) {
+        LOG(WARN, "failed to prepare message");
+        free(str_w);
+        return -1;
+    }
+    free(str_w);
+
+    // send to supervisor
+    int server = tcp_connect(address, port);
+    if (server < 0) {
+        LOG(WARN, "failed to connect to %s:%s", address, port);
+        return -1;
+    }
+    n = write(server, buffer, (size_t) n);
+    if (n < 0) {
+        LOG(WARN, "failed to send command to supervisor");
+        return -1;
+    }
+    if (close(server) < 0) {
+        LOG(WARN, "failed to close connection to supervisor");
+        return -1;
+    }
+
+    return 0;
+}
 
 static void show_progress(uint64_t i, uint64_t t,
                           uint64_t* prev_i, double* prev_time) {
@@ -44,15 +132,16 @@ static void show_progress(uint64_t i, uint64_t t,
 /* when SIGINT is hit, just save the current work and exit
  * NOTE: the handler should be registered *after* the session is fully
  * loaded; otherwise, a badly timed SIGINT might save an empty session */
+const char* supervisor_address;
+const char* supervisor_port;
 struct session* session = NULL;
-sqlite3* db;
 void handle_sigint(int sig){
     if (sig != SIGINT) {
         return;
     }
     fprintf(stderr, "\r\33[K");  // clear line
-    if (session_checkpoint_append(session, db) != 0) {
-        LOG(FATAL, "failed to update session file!");
+    if (save_work(supervisor_address, supervisor_port, session) < 0) {
+        LOG(FATAL, "failed to save work on supervisor");
         exit(EXIT_FAILURE);
     }
     exit(EXIT_SUCCESS);
@@ -65,48 +154,21 @@ extern int main(int argc, char** argv) {
 
     // parse arguments
     parse_debug_args(&argc, argv);
-    const char* savefile = "savefile.db";
-    if (argc == 2) {
-        savefile = argv[1];
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s supervisor-ip port", argv[0]);
+        exit(EXIT_FAILURE);
     }
+    supervisor_address = argv[1];
+    supervisor_port = argv[2];
 
     // display brand string
     char brand_string[49];
     get_brand_string(brand_string);
     printf("%s\n", brand_string);
 
-    // open sqlite3 database
-    if (sqlite3_open(savefile, &db) != SQLITE_OK) {
-        LOG(FATAL, "%s", sqlite3_errmsg(db));
-        return 1;
-    }
-
-    // create table if necessary
-    char* errmsg;
-    sqlite3_exec(db,
-        "CREATE TABLE IF NOT EXISTS checkpoint ("
-        "    i INTEGER UNIQUE,"
-        "    w TEXT,"
-        "    first_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-        "    last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-        ");", NULL, NULL, &errmsg);
-    if (errmsg != NULL) {
-        LOG(FATAL, "%s", errmsg);
-        return 1;
-    }
-
     session = session_new();
-
-    // try to resume from session file
-    int ret = session_load(session, db);
-    if (ret == 0) {
-        LOG(DEBUG, "session file not found; starting from scratch");
-        // continue
-    } else if (ret == 1) {
-        LOG(DEBUG, "session file valid; resuming from it");
-    } else {
-        // this should really not happen!
-        LOG(FATAL, "session file invalid");
+    if (get_work(supervisor_address, supervisor_port, session) < 0) {
+        LOG(FATAL, "failed to get work from supervisor");
         exit(EXIT_FAILURE);
     }
 
@@ -127,8 +189,8 @@ extern int main(int argc, char** argv) {
         }
 
         if ((session->i >> 20) % 32 == 0) {
-            if (session_checkpoint_append(session, db) != 0) {
-                LOG(FATAL, "failed to update session file!");
+            if (save_work(supervisor_address, supervisor_port, session) < 0) {
+                LOG(FATAL, "failed to save work on supervisor");
                 exit(EXIT_FAILURE);
             }
         }
@@ -150,9 +212,5 @@ extern int main(int argc, char** argv) {
 
     // clean up
     session_delete(session);
-    if (sqlite3_close(db) != SQLITE_OK) {
-        LOG(FATAL, "sqlite3_close: %s", sqlite3_errmsg(db));
-        return -1;
-    }
     return EXIT_SUCCESS;
 }

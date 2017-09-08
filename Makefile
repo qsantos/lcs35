@@ -5,7 +5,7 @@ TARGETS = work validate supervisor
 
 all: $(TARGETS)
 
-work: work.o session.o time.o util.o
+work: work.o session.o socket.o time.o util.o
 	@# MinGW wants source files before linker flags
 	$(CC) $^ $(LDFLAGS) -o $@
 
