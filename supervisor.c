@@ -37,8 +37,11 @@ static int db_get_last_i_w(sqlite3* db, uint64_t* i, const char** w) {
         return -1;
     }
     if (sqlite3_step(stmt) != SQLITE_ROW) {
-        LOG(WARN, "No row!");
-        return -1;
+        // database empty, start from scratch
+        *i = 0;
+        *w = "2";
+        LOG(DEBUG, "Database empty");
+        return 0;
     }
     *i = (uint64_t) sqlite3_column_int64(stmt, 0);
     *w = (const char*) sqlite3_column_text(stmt, 1);
@@ -156,6 +159,20 @@ int main(int argc, char** argv) {
     if (sqlite3_open(argv[1], &db) != SQLITE_OK) {
         LOG(FATAL, "sqlite3_open: %s", sqlite3_errmsg(db));
         exit(EXIT_FAILURE);
+    }
+
+    // create table if necessary
+    char* errmsg;
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS checkpoint ("
+        "    i INTEGER UNIQUE,"
+        "    w TEXT,"
+        "    first_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+        "    last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ");", NULL, NULL, &errmsg);
+    if (errmsg != NULL) {
+        LOG(FATAL, "%s", errmsg);
+        return 1;
     }
 
     const char* port = "4242";
