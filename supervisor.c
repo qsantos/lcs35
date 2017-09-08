@@ -80,20 +80,31 @@ extern int db_append_i_w(sqlite3* db, uint64_t i, const char* w) {
         LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
         return -1;
     }
-    if (sqlite3_bind_text(stmt, 2, w, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+    // ensures w is properly formatted (no trailing space)
+    char* str_w = mpz_get_str(NULL, 10, session->w);
+    if (str_w == NULL) {
+        LOG(FATAL, "failed to convert w to decimal");
+        exit(EXIT_FAILURE);
+    }
+    if (sqlite3_bind_text(stmt, 2, str_w, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
         LOG(WARN, "sqlite3_bind_text: %s", sqlite3_errmsg(db));
-        return -1;
+        goto error;
     }
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         LOG(WARN, "sqlite3_step: %s", sqlite3_errmsg(db));
-        return -1;
+        goto error;
     }
     if (sqlite3_finalize(stmt) != SQLITE_OK) {
         LOG(WARN, "sqlite3_finalize: %s", sqlite3_errmsg(db));
-        return -1;
+        goto error;
     }
 
+    LOG(DEBUG, "saved i = %#"PRIx64", w = %s", i, str_w);
+    free(str_w);
     return 0;
+error:
+    free(str_w);
+    return -1;
 }
 
 static int handle_client(int client, sqlite3* db) {
@@ -132,7 +143,6 @@ static int handle_client(int client, sqlite3* db) {
             LOG(ERR, "i and w were not properly saved");
             return -1;
         }
-        LOG(DEBUG, "saved i = %#"PRIx64", w = %s", i, w);
     } else if (startswith(buffer, "mandate:")) {
         LOG(INFO, "command: mandate");
         // TODO
