@@ -21,10 +21,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int get_work(const char* address, const char* port, struct session* session) {
-    int server = tcp_connect(address, port);
+static int get_work(const char* host, const char* port, struct session* session) {
+    int server = tcp_connect(host, port);
     if (server < 0) {
-        LOG(WARN, "failed to connect to %s:%s", address, port);
+        LOG(WARN, "failed to connect to %s:%s", host, port);
         return -1;
     }
     ssize_t n = write(server, "resume:", 7);
@@ -65,7 +65,7 @@ static int get_work(const char* address, const char* port, struct session* sessi
     return 0;
 }
 
-static int save_work(const char* address, const char* port, struct session* session) {
+static int save_work(const char* host, const char* port, struct session* session) {
     if (session_check(session) != 0) {
         LOG(WARN, "inconsistency detected");
         return -1;
@@ -87,9 +87,9 @@ static int save_work(const char* address, const char* port, struct session* sess
     free(str_w);
 
     // send to supervisor
-    int server = tcp_connect(address, port);
+    int server = tcp_connect(host, port);
     if (server < 0) {
-        LOG(WARN, "failed to connect to %s:%s", address, port);
+        LOG(WARN, "failed to connect to %s:%s", host, port);
         return -1;
     }
     n = write(server, buffer, (size_t) n);
@@ -132,7 +132,7 @@ static void show_progress(uint64_t i, uint64_t t,
 /* when SIGINT is hit, just save the current work and exit
  * NOTE: the handler should be registered *after* the session is fully
  * loaded; otherwise, a badly timed SIGINT might save an empty session */
-const char* supervisor_address;
+const char* supervisor_host;
 const char* supervisor_port;
 struct session* session = NULL;
 void handle_sigint(int sig){
@@ -140,7 +140,7 @@ void handle_sigint(int sig){
         return;
     }
     fprintf(stderr, "\r\33[K");  // clear line
-    if (save_work(supervisor_address, supervisor_port, session) < 0) {
+    if (save_work(supervisor_host, supervisor_port, session) < 0) {
         LOG(FATAL, "failed to save work on supervisor");
         exit(EXIT_FAILURE);
     }
@@ -158,7 +158,7 @@ extern int main(int argc, char** argv) {
         fprintf(stderr, "Usage: %s supervisor-ip port", argv[0]);
         exit(EXIT_FAILURE);
     }
-    supervisor_address = argv[1];
+    supervisor_host = argv[1];
     supervisor_port = argv[2];
 
     // display brand string
@@ -167,7 +167,7 @@ extern int main(int argc, char** argv) {
     printf("%s\n", brand_string);
 
     session = session_new();
-    if (get_work(supervisor_address, supervisor_port, session) < 0) {
+    if (get_work(supervisor_host, supervisor_port, session) < 0) {
         LOG(FATAL, "failed to get work from supervisor");
         exit(EXIT_FAILURE);
     }
@@ -189,7 +189,7 @@ extern int main(int argc, char** argv) {
         }
 
         if ((session->i >> 20) % 32 == 0) {
-            if (save_work(supervisor_address, supervisor_port, session) < 0) {
+            if (save_work(supervisor_host, supervisor_port, session) < 0) {
                 LOG(FATAL, "failed to save work on supervisor");
                 exit(EXIT_FAILURE);
             }

@@ -6,14 +6,14 @@
 #include <netdb.h>
 #include <unistd.h>
 
-int tcp_connect(const char* address, const char* port) {
+int tcp_connect(const char* host, const char* port) {
     struct addrinfo hints;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     struct addrinfo* result;
-    getaddrinfo(address, port, &hints, &result);
+    getaddrinfo(host, port, &hints, &result);
 
     int sock;
     struct addrinfo* cur = result;
