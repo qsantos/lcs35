@@ -72,8 +72,8 @@ extern struct session* session_new(void) {
 
     // We exploit a trick offered by Shamir to detect computation errors
     // c is a small prime number (e.g. 32 bits)
-    // it is easy to comptue 2^(2^i) mod c using Euler's totient function
-    // thus, we work moudulo n * c rather than n
+    // it is easy to compute 2^(2^i) mod c using Euler's totient function
+    // thus, we work modulo n * c rather than n
     // at any point, we can then reduce w mod c and compare it to 2^(2^i) mod c
     // in the end, we can reduce w mod n to retrieve the actual result
     mpz_init(session->n_times_c);
